@@ -28,7 +28,7 @@ Build command: `npm run build` · Build output directory: `dist`.
 | | |
 |---|---|
 | `src/main.ts` | oyun döngüsü, kamera, turnalar, skor |
-| `src/player.ts` | yolcu: yürüme/koşma gait karışımı, ceket, bohça, kasa şapka |
+| `src/player.ts` | yolcu: yürüme/koşma gait karışımı, ceket, bohça, kasa şapka; 3B gövde iskeletiyle her yöne döner |
 | `src/cranes.ts` | toplanan kâğıt turnalar |
 | `src/joystick.ts` | dokunduğun yerde çıkan joystick + klavye |
 | `src/lib/`, `src/village/` | line-art-animation kütüphanesi ve köy sahnesi (MIT, `LICENSE.line-art-animation`) |
