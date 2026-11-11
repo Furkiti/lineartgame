@@ -15,7 +15,8 @@
   .card { position: relative; width: 100%; height: 100%; border-radius: 18px; overflow: hidden; --ink: #1c1c1c; --paper: #fdfcf8;
           box-shadow: 0 1px 0 rgba(255,255,255,.7) inset, 0 0 0 1px rgba(40,34,26,.10), 0 18px 50px -18px rgba(40,34,26,.35);
           touch-action: none; isolation: isolate; background: #fdfcf8; }
-  #village, #village svg { display: block; width: 100%; height: 100%; }
+  #village { position: absolute; inset: 0; overflow: hidden; }
+  #village svg { position: absolute; left: 0; top: 0; display: block; will-change: transform; transform-origin: 0 0; }
   #village svg .pp { fill: var(--paper, #fdfdfc); }
   .serif { font-family: "Iowan Old Style", "Hiragino Mincho ProN", "Yu Mincho", Georgia, serif; }
 
@@ -39,7 +40,7 @@
            left: 50%; bottom: max(26px, 6%); transform: translateX(-50%);
            background: color-mix(in srgb, var(--paper) 58%, transparent); border: 1.6px solid var(--ink);
            box-shadow: inset 0 0 0 5px color-mix(in srgb, var(--paper) 40%, transparent), inset 0 0 0 6px color-mix(in srgb, var(--ink) 22%, transparent);
-           -webkit-backdrop-filter: blur(2px); backdrop-filter: blur(2px); transition: opacity .3s; opacity: .9; }
+           transition: opacity .3s; opacity: .9; }
   #stick::before, #stick::after { content: ""; position: absolute; left: 50%; top: 50%; background: var(--ink); opacity: .35; }
   #stick::before { width: 1.2px; height: 70%; transform: translate(-50%, -50%); }
   #stick::after { height: 1.2px; width: 70%; transform: translate(-50%, -50%); }

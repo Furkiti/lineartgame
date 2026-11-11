@@ -28,7 +28,8 @@ export function el<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Attrs = 
   if (parent) parent.appendChild(n);
   return n;
 }
-export const f = (n: number): string => n.toFixed(2);
+// rounding by hand is several times faster than toFixed, and this runs ~10k times a frame
+export const f = (n: number): string => String(Math.round(n * 100) / 100);
 export const pt = (p: readonly number[]): string => `${f(p[0])} ${f(p[1])}`;
 
 /** Open pen stroke. */

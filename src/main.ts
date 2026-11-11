@@ -13,10 +13,19 @@ import { createCranes } from './cranes.ts';
 import { createJoystick } from './joystick.ts';
 
 const GOAL = 12;
+
+// The village sets thousands of attributes per frame, many to the value they already
+// have (a lamp that is off, a firefly at noon). Skipping those spares the browser from
+// repainting things that did not change — the biggest win on phones.
+const setAttr = Element.prototype.setAttribute;
+Element.prototype.setAttribute = function (name: string, value: string) {
+  const v = String(value);
+  if (this.getAttribute(name) !== v) setAttr.call(this, name, v);
+};
 const q = new URLSearchParams(location.search);
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;
 const card = $('#card');
-const svg = el('svg', { class: 'village', role: 'img', preserveAspectRatio: 'xMidYMax slice', 'aria-label': 'Mürekkeple çizilmiş bir Japon sokağı; joystick ile yürüyen bir yolcu.' });
+const svg = el('svg', { class: 'village', role: 'img', viewBox: `0 0 ${W} ${H}`, 'aria-label': 'Mürekkeple çizilmiş bir Japon sokağı; joystick ile yürüyen bir yolcu.' });
 const ink = inkDefs(svg, 'v');
 $('#village').appendChild(svg);
 const defs = ink.defs;
@@ -27,10 +36,15 @@ grad('v-cateye', [[0, '#e8ff9a', 1], [1, '#c8ff6a', 0]], { radial: true });
 
 const layer = (parent: Element = svg, attrs: Record<string, string> = {}) => el('g', attrs, parent);
 const skyL = layer();
-const scene = layer(svg, { filter: ink.filter });
+// The ink-wobble filter is costly over the whole scene, so it only goes on the moving figures
+// (a strip along the street). ?ink puts it back on everything.
+// Safari renders SVG filters on the CPU, so on touch screens the figures go without it too.
+const INK_FIGURES = !q.has('ink') && !q.has('flat') && !matchMedia('(pointer: coarse)').matches;
+const scene = layer(svg, q.has('ink') ? { filter: ink.filter } : {});
 const back = layer(scene), birdsL = layer(scene), ground = layer(scene), houses = layer(scene), front = layer(scene);
-const catL = layer(scene), shadowsL = layer(scene), walkers = layer(scene), canalL = layer(scene), boatL = layer(scene), willowL = layer(scene), petalL = layer(scene, { style: 'pointer-events:none' });
-const glow = layer(svg, { style: 'mix-blend-mode:screen;pointer-events:none' });
+const catL = layer(scene), shadowsL = layer(scene), walkers = layer(scene, INK_FIGURES ? { filter: ink.filter } : {}), canalL = layer(scene), boatL = layer(scene), willowL = layer(scene), petalL = layer(scene, { style: 'pointer-events:none' });
+// screen-blending the glows makes Safari composite the whole scene off-screen every frame
+const glow = layer(svg, { style: (q.has('blend') ? 'mix-blend-mode:screen;' : '') + 'pointer-events:none' });
 
 // ------------------------------------------------------------------ time
 let tau = q.has('tau') ? +q.get('tau') : q.has('start') ? +q.get('start') : 0.64;
@@ -103,6 +117,7 @@ const cranes = createCranes(walkers, shadowsL, glow);
 const stick = createJoystick($('#stick'), $('#knob'));
 
 // ------------------------------------------------------------------ camera: the card follows you
+const VBCAM = !q.has('slide');
 let vb = { x: 0, y: 0, w: W, h: H }, camX = -1;
 function frame() {
   const r = card.getBoundingClientRect();
@@ -110,7 +125,13 @@ function frame() {
   const w = clamp(H * aspect, 200, aspect > 1.2 ? 820 : W);
   const h = Math.min(H, w / aspect);
   vb.w = w; vb.h = h; vb.y = H - h;
+  // the whole street is drawn once at screen scale and the camera just slides it (GPU),
+  // instead of changing the viewBox, which would repaint every line every frame
+  k = r.width / w;
+  if (VBCAM) { svg.style.width = `${r.width}px`; svg.style.height = `${r.height}px`; svg.setAttribute('preserveAspectRatio', 'xMidYMax slice'); }
+  else { svg.style.width = `${W * k}px`; svg.style.height = `${H * k}px`; }
 }
+let k = 1;
 addEventListener('resize', frame); frame();
 
 // ------------------------------------------------------------------ game state & hud
@@ -134,16 +155,16 @@ const clock = $('#clock');
 const period = (h) => (h < 4 ? 'gece yarısı' : h < 6 ? 'şafak' : h < 10 ? 'sabah' : h < 15 ? 'öğle' : h < 17.5 ? 'ikindi' : h < 19.5 ? 'akşam' : 'gece');
 
 // ------------------------------------------------------------------ frame
-let P = palette(tau);
+let P = palette(tau), lastInk = '', lastPaper = '';
 let started = false;
 run((t, dt) => {
   dt = dt || 1 / 60;
   if (scrub === null && !frozenTau) tau = (tau + dt / DAY_SECONDS) % 1;
   P = palette(tau);
-  svg.style.color = rgb(P.ink);
-  svg.style.setProperty('--paper', rgb(P.paper));
-  card.style.setProperty('--ink', rgb(P.ink));
-  card.style.setProperty('--paper', rgb(P.paper));
+  // restyle only when the colour actually changes: every change restyles every line
+  const inkS = rgb(P.ink), paperS = rgb(P.paper);
+  if (inkS !== lastInk) { lastInk = inkS; svg.style.color = inkS; card.style.setProperty('--ink', inkS); }
+  if (paperS !== lastPaper) { lastPaper = paperS; svg.style.setProperty('--paper', paperS); card.style.setProperty('--paper', paperS); }
 
   windTarget = lerp(windTarget, 0.3 + 0.25 * Math.sin(t * 0.21) + 0.15 * Math.sin(t * 0.67), 0.012);
   wind = lerp(wind, windTarget, 0.05);
@@ -157,7 +178,8 @@ run((t, dt) => {
   const target = clamp(player.x - vb.w / 2 + player.dir * vb.w * 0.08, 0, W - vb.w);
   camX = camX < 0 ? target : lerp(camX, target, 1 - Math.exp(-dt * 3.5));
   vb.x = camX;
-  svg.setAttribute('viewBox', `${f(vb.x)} ${f(vb.y)} ${f(vb.w)} ${f(vb.h)}`);
+  if (VBCAM) svg.setAttribute('viewBox', `${f(vb.x)} ${f(vb.y)} ${f(vb.w)} ${f(vb.h)}`);
+  else svg.style.transform = `translate3d(${f(-vb.x * k)}px, ${f(-vb.y * k)}px, 0)`;
 
   sky.draw(tau, t, dt, P, wind);
   street.applyRed(P);
@@ -166,13 +188,12 @@ run((t, dt) => {
     let lit = smooth(w.thr, w.thr + 0.25, P.lamp);
     if (w.lateOff < 9 && sinceDusk > w.lateOff - 0.75 && sinceDusk < 0.5) lit = 0;
     w.lit = lerp(w.lit, lit, 0.08);
-    w.n.style.fill = rgb(mix(P.paper, mix(hex('#ffd58a'), hex('#f0a24e'), w.warmth), w.lit * 0.92));
-    w.glow.setAttribute('opacity', f(w.lit * 0.8));
+    const fill = rgb(mix(P.paper, mix(hex('#ffd58a'), hex('#f0a24e'), w.warmth), w.lit * 0.92));
+    if (fill !== w.lastFill) { w.lastFill = fill; w.n.style.fill = fill; w.glow.setAttribute('opacity', f(w.lit * 0.8)); }
   });
-  const L = street.lamp, lampOn = smooth(0.2, 0.45, P.lamp);
-  L.node.style.fill = rgb(mix(P.paper, hex('#fff1c9'), lampOn));
-  L.cone.setAttribute('opacity', f(lampOn * 0.75));
-  L.glow.setAttribute('opacity', f(lampOn));
+  const L = street.lamp as typeof street.lamp & { last?: string }, lampOn = smooth(0.2, 0.45, P.lamp);
+  const lampS = rgb(mix(P.paper, hex('#fff1c9'), lampOn));
+  if (lampS !== L.last) { L.last = lampS; L.node.style.fill = lampS; L.cone.setAttribute('opacity', f(lampOn * 0.75)); L.glow.setAttribute('opacity', f(lampOn)); }
 
   street.norens.forEach((n) => n.draw(t, dt, wind, tau, P));
   street.lanterns.forEach((l) => l.draw(t, dt, wind, P));
@@ -233,7 +254,9 @@ run((t, dt) => {
 
   // depth: whoever is nearer the canal is drawn in front
   const all = [...people, player, ...cranes.list.map((c) => ({ g: c.g, y: c.y + 0.5 }))];
-  all.sort((a, b) => a.y - b.y).forEach((p) => walkers.appendChild(p.g));
+  all.sort((a, b) => a.y - b.y);
+  let prev: Element | null = null;
+  for (const p of all) { if (p.g.previousElementSibling !== prev) walkers.insertBefore(p.g, prev ? prev.nextSibling : walkers.firstChild); prev = p.g; }
 
   const hrs = tau * 24, h = Math.floor(hrs), m = Math.floor((hrs - h) * 60);
   clock.innerHTML = `<b>${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}</b> <span>${period(hrs)}</span>`;
