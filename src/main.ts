@@ -114,7 +114,7 @@ function addPerson(kind: 'kimono' | 'bike' | 'kid', x?: number) {
 // ------------------------------------------------------------------ you, the cranes, the joystick
 const player = createPlayer(walkers, q.has('x') ? +q.get('x') : 200, 368);
 const cranes = createCranes(walkers, shadowsL, glow);
-const stick = createJoystick($('#stick'), $('#knob'));
+const stick = createJoystick(card, $('#stick'), $('#knob'));
 
 // ------------------------------------------------------------------ camera: the card follows you
 const VBCAM = !q.has('slide');
