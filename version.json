@@ -1,9 +1,9 @@
 {
   "name": "Mürekkep Sokağı",
-  "version": "0.2.0",
-  "commit": "7732ac28d0627e2e098f0ba07dcff59858ee1817",
-  "shortCommit": "7732ac2",
+  "version": "0.3.0",
+  "commit": "e8e417ee58d78af4582e0ca0b75b14ef2f364a54",
+  "shortCommit": "e8e417e",
   "branch": "main",
-  "message": "Yolcu her yöne dönsün",
-  "deployedAt": "2026-11-11T15:54:37Z"
+  "message": "Eve girilebilsin: mutfakta suşi hazırla, masada ye",
+  "deployedAt": "2026-11-11T16:08:17Z"
 }

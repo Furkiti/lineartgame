@@ -51,6 +51,15 @@
     #hint { top: 30%; }
   }
 
+  /* one action button for whatever can be done where you stand */
+  #act { position: absolute; left: 50%; bottom: max(30px, 7%); z-index: 3; transform: translate(-50%, 8px); opacity: 0; pointer-events: none;
+         font: 600 15px/1 "Iowan Old Style", Georgia, serif; letter-spacing: .02em; color: #fdfcf8; background: #c8423a;
+         border: 1.6px solid var(--ink); border-radius: 999px; padding: 11px 22px; box-shadow: 3px 4px 0 color-mix(in srgb, var(--ink) 25%, transparent);
+         transition: opacity .2s, transform .2s; cursor: pointer; -webkit-tap-highlight-color: transparent; white-space: nowrap; }
+  #act.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
+  #act:active { transform: translate(-50%, 2px); box-shadow: 1px 2px 0 color-mix(in srgb, var(--ink) 25%, transparent); }
+  #fade { position: absolute; inset: 0; background: var(--paper); opacity: 0; pointer-events: none; z-index: 4; }
+
   #win { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; opacity: 0; transition: opacity .6s; }
   #win.show { opacity: 1; pointer-events: auto; }
   #win .box { background: var(--paper); color: var(--ink); border: 1.6px solid var(--ink); border-radius: 14px; padding: 20px 26px 18px; text-align: center;
@@ -71,6 +80,8 @@
     </div>
     <p id="hint">Bir yere bas ve sürükle, sonuna kadar itersen koşarsın.<br>Sokaktaki kırmızı kâğıt turnaları topla.</p>
     <div id="stick"><div id="knob"></div></div>
+    <button id="act" type="button"></button>
+    <div id="fade"></div>
     <div id="win"><div class="box">
       <h2>12 turna toplandı</h2>
       <p><span id="winTime">0:00.0</span> · <span id="winBest"></span></p>

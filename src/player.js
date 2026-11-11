@@ -87,8 +87,18 @@ export function createPlayer(parent, x, y) {
     const bend = spring(40, 9);
     const sway = spring(26, 3.2), hatS = spring(30, 4.5);
     let phase = 0, go = 0, r = 0, lastBob = 0, heading = 0, lastOrder = '';
+    const poseS = { work: 0, chop: 0, hold: 0 };
     const self = {
         g, x, y, dir: 1, speed: 0, running: 0, moving: 0,
+        /** Where the figure may walk, in scene units. */
+        bounds: { x0: 14, x1: 946 },
+        /** Arm poses to blend toward, each 0…1: working at a counter, chopping with the right hand, carrying a tray. */
+        pose: { work: 0, chop: 0, hold: 0 },
+        /** When set, the body turns to this heading instead of following the stick. */
+        faceTo: null,
+        /** Both hands, averaged, in scene units (for things carried). */
+        hands: [x, y - 30],
+        setHeading(h) { heading = wrap(h); },
         /** Heading in radians: 0 faces right, π/2 faces you, π left, -π/2 away. */
         heading: 0,
         /** cos(heading): 1 facing right … -1 facing left, smooth through the turn. */
@@ -106,14 +116,17 @@ export function createPlayer(parent, x, y) {
             const period = lerp(walk.period / rate, run.period, r);
             phase += (dt / period) * go;
             const speed = lerp(walk.speed * rate, run.speed, r) * FS * go;
-            if (m > 0.12) {
+            const aim = self.faceTo ?? (m > 0.12 ? Math.atan2(jy, jx) : null);
+            if (aim !== null) {
                 // turn the shortest way round toward where the stick points
-                heading += wrap(Math.atan2(jy, jx) - heading) * (1 - Math.exp(-dt * TURN));
+                heading += wrap(aim - heading) * (1 - Math.exp(-dt * TURN));
                 heading = wrap(heading);
+            }
+            if (m > 0.12) {
                 self.x += (jx / m) * speed * dt;
                 self.y += (jy / m) * speed * 0.6 * dt;
             }
-            self.x = clamp(self.x, 14, 946);
+            self.x = clamp(self.x, self.bounds.x0, self.bounds.x1);
             self.y = clamp(self.y, Y_MIN, Y_MAX);
             self.speed = speed;
             self.running = r * go;
@@ -245,17 +258,30 @@ export function createPlayer(parent, x, y) {
             const amp = lerp(15, 38, r) * go;
             const elb = bend.step(lerp(0.15, 1.5, r * go), dt);
             const armDepth = [];
+            const ease = 1 - Math.exp(-dt * 8);
+            poseS.work += (self.pose.work - poseS.work) * ease;
+            poseS.chop += (self.pose.chop - poseS.chop) * ease;
+            poseS.hold += (self.pose.hold - poseS.hold) * ease;
+            const busy = Math.max(poseS.work, poseS.hold);
+            const handSum = [0, 0];
             [1, -1].forEach((side, i) => {
-                const a = armS[i].step(-side * legSwing * amp, dt) * RAD; // left arm swings against the left leg
+                // walking: the left arm swings against the left leg. working: both reach forward, the right one chops.
+                let aim = lerp(-side * legSwing * amp, 34 + (side < 0 ? Math.sin(t * 15) * 16 * poseS.chop : 0), poseS.work);
+                aim = lerp(aim, 50, poseS.hold);
+                const a = armS[i].step(aim, dt) * RAD;
+                const eb = lerp(elb, lerp(1.0, 1.45, poseS.hold / Math.max(1e-3, busy)), busy);
                 const w = side * SHOULDER_W, sv = sh[1] + 2.5, su0 = su + 0.2;
                 const eu = su0 + 15 * Math.sin(a), ev = sv + 15 * Math.cos(a);
-                const hu = eu + 14 * Math.sin(a + elb), hv = ev + 14 * Math.cos(a + elb);
-                const hand = X(hu, w + side * 1.2, hv);
-                arms[i].draw([X(su0, w, sv), X(eu, w + side * 0.7, ev), hand], [0.2, 0.4]);
+                const hu = eu + 14 * Math.sin(a + eb), hv = ev + 14 * Math.cos(a + eb);
+                const hand = X(hu, lerp(w + side * 1.2, side * 2.6, poseS.hold), hv);
+                handSum[0] += hand[0] / 2;
+                handSum[1] += hand[1] / 2;
+                arms[i].draw([X(su0, w, sv), X(eu, lerp(w + side * 0.7, side * 4.6, poseS.hold), ev), hand], [0.2, 0.4]);
                 hands[i].setAttribute('cx', f(hand[0]));
                 hands[i].setAttribute('cy', f(hand[1]));
                 armDepth[i] = depth(su0, w);
             });
+            self.hands = [self.x + (handSum[0] - 40) * FS, self.y + (handSum[1] - 120) * FS];
             // painter's order, nearest last
             const order = [
                 [legG[0], -100 + legDepth[0]], [legG[1], -100 + legDepth[1]],
