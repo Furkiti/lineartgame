@@ -1,11 +1,12 @@
 // A thumb joystick drawn in the same pen as the scene, plus arrow keys / WASD.
-export function createJoystick(base, knob) {
+// It is hidden until you touch the card: it appears centred under your thumb,
+// follows the drag, and fades away as soon as you lift it.
+export function createJoystick(area, base, knob) {
     const v = { x: 0, y: 0, active: false, touched: false };
-    let id = null;
-    const R = () => base.getBoundingClientRect().width * 0.38;
+    let id = null, cx = 0, cy = 0;
+    const R = () => base.offsetWidth * 0.38;
     const set = (e) => {
-        const b = base.getBoundingClientRect();
-        let dx = e.clientX - (b.left + b.width / 2), dy = e.clientY - (b.top + b.height / 2);
+        let dx = e.clientX - cx, dy = e.clientY - cy;
         const r = R(), d = Math.hypot(dx, dy);
         if (d > r) {
             dx *= r / d;
@@ -15,14 +16,45 @@ export function createJoystick(base, knob) {
         v.x = dx / r;
         v.y = dy / r;
     };
-    const release = () => { id = null; v.active = false; v.x = 0; v.y = 0; knob.style.transform = ''; base.classList.remove('on'); };
-    base.addEventListener('pointerdown', (e) => { e.preventDefault(); id = e.pointerId; base.setPointerCapture(id); v.active = true; v.touched = true; base.classList.add('on'); set(e); });
-    base.addEventListener('pointermove', (e) => { if (e.pointerId === id)
+    const release = (e) => {
+        if (e.pointerId !== id)
+            return;
+        id = null;
+        v.active = false;
+        v.x = 0;
+        v.y = 0;
+        knob.style.transform = '';
+        base.classList.remove('on');
+    };
+    // capture phase, so it also works over the lanterns, the canal, the people… (they still get poked)
+    area.addEventListener('pointerdown', (e) => {
+        if (id !== null)
+            return;
+        const t = e.target;
+        if (t.closest?.('.drag, #win.show'))
+            return; // sun/moon scrubbing and the win card keep their own touch
+        e.preventDefault();
+        id = e.pointerId;
+        cx = e.clientX;
+        cy = e.clientY;
+        try {
+            area.setPointerCapture(id);
+        }
+        catch { }
+        const a = area.getBoundingClientRect();
+        base.style.left = `${cx - a.left}px`;
+        base.style.top = `${cy - a.top}px`;
+        v.active = true;
+        v.touched = true;
+        knob.style.transform = '';
+        base.classList.add('on');
+        set(e);
+    }, true);
+    area.addEventListener('pointermove', (e) => { if (e.pointerId === id)
         set(e); });
-    base.addEventListener('pointerup', (e) => { if (e.pointerId === id)
-        release(); });
-    base.addEventListener('pointercancel', (e) => { if (e.pointerId === id)
-        release(); });
+    area.addEventListener('pointerup', release);
+    area.addEventListener('pointercancel', release);
+    area.addEventListener('lostpointercapture', release);
     const keys = new Set();
     addEventListener('keydown', (e) => { keys.add(e.key.toLowerCase()); if (e.key.startsWith('Arrow') || e.key === ' ')
         e.preventDefault(); v.touched = true; });

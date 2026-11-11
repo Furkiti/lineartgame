@@ -1,6 +1,6 @@
 // Cat, sparrows, swallows, cherry petals, chimney smoke.
-import { el, pen, shape, blot, f, pt, PAPER } from '../lib/ink.js';
-import { W, BASE, EDGE, WATER, SP, rnd, pick, clamp, lerp, smooth, ease, oval, rgb, hex, mix, wobble } from './kit.js';
+import { el, pen, shape, blot, f, pt, PAPER } from "../lib/ink.js";
+import { W, BASE, EDGE, WATER, SP, rnd, pick, clamp, lerp, smooth, ease, oval, rgb, hex, mix, wobble } from "./kit.js";
 const L2 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t)];
 // ===================================================================== calico cat on the bench
 // Pose = a handful of points; the cat blends between keyed poses.

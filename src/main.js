@@ -1,16 +1,16 @@
 // Mürekkep Sokağı — steer a traveller through the ink village with a thumb joystick
 // and gather the paper cranes. The village (street, canal, sky, villagers, critters)
 // comes from github.com/JDhruv14/line-art-animation (MIT).
-import { el, inkDefs, run, f } from './lib/ink.js';
-import { W, H, LANE, rnd, clamp, lerp, smooth, rgb, hex, mix } from './village/kit.js';
-import { createSky, palette } from './village/sky.js';
-import { buildStreet } from './village/houses.js';
-import { buildCanal } from './village/canal.js';
-import { createKimono, createCyclist, createKid, createBoat } from './village/people.js';
-import { createCat, createSparrows, createSwallows, createPetals, createSmoke } from './village/critters.js';
-import { createPlayer } from './player.js';
-import { createCranes } from './cranes.js';
-import { createJoystick } from './joystick.js';
+import { el, inkDefs, run, f } from "./lib/ink.js";
+import { W, H, LANE, rnd, clamp, lerp, smooth, rgb, hex, mix } from "./village/kit.js";
+import { createSky, palette } from "./village/sky.js";
+import { buildStreet } from "./village/houses.js";
+import { buildCanal } from "./village/canal.js";
+import { createKimono, createCyclist, createKid, createBoat } from "./village/people.js";
+import { createCat, createSparrows, createSwallows, createPetals, createSmoke } from "./village/critters.js";
+import { createPlayer } from "./player.js";
+import { createCranes } from "./cranes.js";
+import { createJoystick } from "./joystick.js";
 const GOAL = 12;
 // The village sets thousands of attributes per frame, many to the value they already
 // have (a lamp that is off, a firefly at noon). Skipping those spares the browser from
@@ -112,7 +112,7 @@ function addPerson(kind, x) {
 // ------------------------------------------------------------------ you, the cranes, the joystick
 const player = createPlayer(walkers, q.has('x') ? +q.get('x') : 200, 368);
 const cranes = createCranes(walkers, shadowsL, glow);
-const stick = createJoystick($('#stick'), $('#knob'));
+const stick = createJoystick(card, $('#stick'), $('#knob'));
 // ------------------------------------------------------------------ camera: the card follows you
 const VBCAM = !q.has('slide');
 let vb = { x: 0, y: 0, w: W, h: H }, camX = -1;

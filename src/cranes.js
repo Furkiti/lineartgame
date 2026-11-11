@@ -1,8 +1,8 @@
 // Paper cranes (orizuru) hovering over the street. Walk into one and it wakes,
 // flaps and flies off over the roofs.
-import { el, f } from './lib/ink.js';
-import { rnd, clamp, rgb, hex, mix, smooth } from './village/kit.js';
-import { Y_MIN, Y_MAX } from './player.js';
+import { el, f } from "./lib/ink.js";
+import { rnd, clamp, rgb, hex, mix, smooth } from "./village/kit.js";
+import { Y_MIN, Y_MAX } from "./player.js";
 const RED = '#c8423a';
 const tint = (c, P, k = 0.45) => rgb(mix(hex(c), mix(hex(c), [12, 16, 30], 0.6), P.inkT * k));
 export function createCranes(parent, shadows, glow) {

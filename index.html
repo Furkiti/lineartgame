@@ -35,21 +35,19 @@
           font: italic 15px/1.5 "Iowan Old Style", Georgia, serif; opacity: .85; pointer-events: none; transition: opacity 1.2s; }
   #hint.gone { opacity: 0; }
 
-  /* thumb stick, drawn like the scene: a pen circle on paper */
-  #stick { position: absolute; width: 132px; height: 132px; border-radius: 50%; touch-action: none; cursor: grab;
-           left: 50%; bottom: max(26px, 6%); transform: translateX(-50%);
+  /* thumb stick, drawn like the scene: a pen circle on paper. It appears under your thumb wherever you touch. */
+  #stick { position: absolute; left: 50%; top: 50%; width: 104px; height: 104px; border-radius: 50%; pointer-events: none; z-index: 2;
            background: color-mix(in srgb, var(--paper) 58%, transparent); border: 1.6px solid var(--ink);
-           box-shadow: inset 0 0 0 5px color-mix(in srgb, var(--paper) 40%, transparent), inset 0 0 0 6px color-mix(in srgb, var(--ink) 22%, transparent);
-           transition: opacity .3s; opacity: .9; }
+           box-shadow: inset 0 0 0 4px color-mix(in srgb, var(--paper) 40%, transparent), inset 0 0 0 5px color-mix(in srgb, var(--ink) 22%, transparent);
+           transform: translate(-50%, -50%) scale(.82); opacity: 0; transition: opacity .18s ease-out, transform .18s ease-out; }
   #stick::before, #stick::after { content: ""; position: absolute; left: 50%; top: 50%; background: var(--ink); opacity: .35; }
   #stick::before { width: 1.2px; height: 70%; transform: translate(-50%, -50%); }
   #stick::after { height: 1.2px; width: 70%; transform: translate(-50%, -50%); }
-  #knob { position: absolute; left: 50%; top: 50%; width: 54px; height: 54px; margin: -27px 0 0 -27px; border-radius: 50%; z-index: 1;
-          background: #c8423a; border: 1.6px solid var(--ink); box-shadow: inset -4px -5px 0 rgba(0,0,0,.14); transition: transform .12s ease-out; }
-  #stick.on { opacity: 1; cursor: grabbing; }
-  #stick.on #knob { transition: none; }
+  #knob { position: absolute; left: 50%; top: 50%; width: 42px; height: 42px; margin: -21px 0 0 -21px; border-radius: 50%; z-index: 1;
+          background: #c8423a; border: 1.6px solid var(--ink); box-shadow: inset -3px -4px 0 rgba(0,0,0,.14); }
+  #stick.on { opacity: .95; transform: translate(-50%, -50%); transition: opacity .1s ease-out, transform .12s ease-out; }
   @media (orientation: landscape) and (max-height: 520px) {
-    #stick { left: max(30px, 4%); transform: none; bottom: 22px; width: 118px; height: 118px; }
+    #stick { width: 96px; height: 96px; }
     #hint { top: 30%; }
   }
 
@@ -71,7 +69,7 @@
       <div id="clock"></div>
       <div class="score"><span id="count">0 / 12</span><span id="time">0:00.0</span></div>
     </div>
-    <p id="hint">Joystick'i sürükle, sonuna kadar itersen koşarsın.<br>Sokaktaki kırmızı kâğıt turnaları topla.</p>
+    <p id="hint">Bir yere bas ve sürükle, sonuna kadar itersen koşarsın.<br>Sokaktaki kırmızı kâğıt turnaları topla.</p>
     <div id="stick"><div id="knob"></div></div>
     <div id="win"><div class="box">
       <h2>12 turna toplandı</h2>

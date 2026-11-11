@@ -2,10 +2,10 @@
 // the back. Legs are solved by gait() — a walk and an adult run blended by how far
 // the joystick is pushed — so the planted foot stays put at any speed. Arms, the
 // bundle and the hat lag on springs.
-import { el, pen, shape, blot, paint, limb, solid, shoe, f, pt, PEN, PAPER } from './lib/ink.js';
-import { gait } from './lib/gait.js';
-import { spring, clamp, lerp, smooth } from './lib/motion.js';
-import { FS, rgb, hex, mix } from './village/kit.js';
+import { el, pen, shape, blot, paint, limb, solid, shoe, f, pt, PEN, PAPER } from "./lib/ink.js";
+import { gait } from "./lib/gait.js";
+import { spring, clamp, lerp, smooth } from "./lib/motion.js";
+import { FS, rgb, hex, mix } from "./village/kit.js";
 const RAD = Math.PI / 180;
 const tint = (c, P, k = 0.55) => rgb(mix(hex(c), mix(hex(c), [12, 16, 30], 0.6), P.inkT * k));
 const C = { jacket: '#34507a', trousers: '#3a3a40', bundle: '#b3412d', hat: '#e3c78a', obi: '#d3a24c' };
