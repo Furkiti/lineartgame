@@ -22,7 +22,7 @@ export function createJoystick(area: HTMLElement, base: HTMLElement, knob: HTMLE
   area.addEventListener('pointerdown', (e) => {
     if (id !== null) return;
     const t = e.target as Element;
-    if (t.closest?.('.drag, #win.show')) return; // sun/moon scrubbing and the win card keep their own touch
+    if (t.closest?.('.drag, #win.show, button')) return; // sun/moon scrubbing and the win card keep their own touch
     e.preventDefault();
     id = e.pointerId; cx = e.clientX; cy = e.clientY;
     try { area.setPointerCapture(id); } catch {}

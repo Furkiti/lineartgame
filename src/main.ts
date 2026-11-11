@@ -8,7 +8,8 @@ import { buildStreet } from './village/houses.ts';
 import { buildCanal } from './village/canal.ts';
 import { createKimono, createCyclist, createKid, createBoat } from './village/people.ts';
 import { createCat, createSparrows, createSwallows, createPetals, createSmoke } from './village/critters.ts';
-import { createPlayer } from './player.ts';
+import { createPlayer, Y_MIN } from './player.ts';
+import { buildHome } from './village/home.ts';
 import { createCranes } from './cranes.ts';
 import { createJoystick } from './joystick.ts';
 
@@ -116,6 +117,39 @@ const player = createPlayer(walkers, q.has('x') ? +q.get('x') : 200, 368);
 const cranes = createCranes(walkers, shadowsL, glow);
 const stick = createJoystick(card, $('#stick'), $('#knob'));
 
+// ------------------------------------------------------------------ the bath house at the end of the street is home
+const home = buildHome(svg);
+const DOOR = { x: 826, w: 24 };
+const STREET = { bounds: { x0: 14, x1: 946 }, view: { x0: 0, x1: W } };
+let inside = false, fade = 0, fadeTo = 0, pending: (() => void) | null = null, hintUntil = -1, tNow = 0;
+const fadeN = $('#fade'), actN = $<HTMLButtonElement>('#act');
+const go = (fn: () => void) => { if (!pending) { pending = fn; fadeTo = 1; } };
+function enter() {
+  inside = true;
+  [skyL, scene, glow].forEach((n) => (n.style.display = 'none'));
+  home.root.style.display = '';
+  home.actors.appendChild(player.g);
+  player.x = home.spawn.x; player.y = home.spawn.y; player.setHeading(Math.PI / 2);
+  player.bounds = home.bounds; camX = -1;
+  if (home.made === 0) { hintN.innerHTML = 'Mutfağa geç, tezgâhta suşi hazırla.'; hintN.classList.remove('gone'); hintUntil = tNow + 4; }
+}
+function exit() {
+  inside = false;
+  [skyL, scene, glow].forEach((n) => (n.style.display = ''));
+  home.root.style.display = 'none';
+  walkers.appendChild(player.g);
+  player.x = DOOR.x; player.y = Y_MIN + 3; player.setHeading(Math.PI / 2);
+  player.bounds = STREET.bounds; camX = -1;
+}
+const atDoor = () => !inside && Math.abs(player.x - DOOR.x) < DOOR.w && player.y < 362;
+function act() {
+  if (pending || winN.classList.contains('show')) return;
+  if (!inside) { if (atDoor()) go(enter); return; }
+  if (home.act(player) === 'exit') go(exit);
+}
+actN.addEventListener('click', act);
+addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key.toLowerCase() === 'e') { e.preventDefault(); act(); } });
+
 // ------------------------------------------------------------------ camera: the card follows you
 const VBCAM = !q.has('slide');
 let vb = { x: 0, y: 0, w: W, h: H }, camX = -1;
@@ -170,12 +204,28 @@ run((t, dt) => {
   wind = lerp(wind, windTarget, 0.05);
 
   // you
-  const j = stick.read();
+  tNow = t;
+  let j = stick.read();
+  const lock = inside ? home.lock : null;
+  if (pending || lock) j = { x: 0, y: 0 };
+  if (lock) { const e = 1 - Math.exp(-dt * 10); player.x = lerp(player.x, lock.x, e); player.y = lerp(player.y, lock.y, e); }
+  player.faceTo = lock ? lock.heading : null;
+  player.pose = inside ? home.pose : { work: 0, chop: 0, hold: 0 };
   player.update(t, dt, j.x, j.y, P, wind);
-  if (stick.touched) hintN.classList.add('gone');
+  if (stick.touched && t > hintUntil) hintN.classList.add('gone');
+  if (inside) home.draw(t, dt, P, player);
+
+  // fade through the paper when going in or out
+  fade = clamp(fade + (fadeTo ? dt : -dt) * 3.4, 0, 1);
+  if (fade >= 1 && pending) { pending(); pending = null; fadeTo = 0; }
+  fadeN.style.opacity = f(fade);
+  const label = pending ? null : inside ? home.prompt(player) : atDoor() && !winN.classList.contains('show') ? 'İçeri gir' : null;
+  if (label && actN.textContent !== label) actN.textContent = label;
+  actN.classList.toggle('show', !!label);
 
   // camera eases after you, and leads a little in the direction you face
-  const target = clamp(player.x - vb.w / 2 + player.face * vb.w * 0.08, 0, W - vb.w);
+  const view = inside ? home.view : STREET.view;
+  const target = view.x1 - view.x0 <= vb.w ? (view.x0 + view.x1 - vb.w) / 2 : clamp(player.x - vb.w / 2 + player.face * vb.w * 0.08, view.x0, view.x1 - vb.w);
   camX = camX < 0 ? target : lerp(camX, target, 1 - Math.exp(-dt * 3.5));
   vb.x = camX;
   if (VBCAM) svg.setAttribute('viewBox', `${f(vb.x)} ${f(vb.y)} ${f(vb.w)} ${f(vb.h)}`);
@@ -213,7 +263,7 @@ run((t, dt) => {
   // the world notices you
   cdCat -= dt; cdBirds -= dt; cdTree -= dt;
   if (cdCat < 0 && near(player.x, 548, 26, player.y, 352, 4)) { cat.poke(); cdCat = 12; }
-  if (cdBirds < 0 && player.running > 0.6 && player.x > 520) { sparrows.flush(); cdBirds = 8; }
+  if (cdBirds < 0 && !inside && player.running > 0.6 && player.x > 520) { sparrows.flush(); cdBirds = 8; }
   if (cdTree < 0 && player.running > 0.6 && player.x > 405 && player.x < 515 && player.y < 360) { shakeTree(24); cdTree = 7; }
 
   // villagers
@@ -235,7 +285,7 @@ run((t, dt) => {
   }
 
   // cranes
-  const got = cranes.draw(t, dt, P, player.x, player.y, player.dir);
+  const got = cranes.draw(t, dt, P, inside ? -9999 : player.x, player.y, player.dir);
   if (got && playing) {
     score += got; bump();
     countN.textContent = `${Math.min(score, GOAL)} / ${GOAL}`;
@@ -248,12 +298,12 @@ run((t, dt) => {
       winN.classList.add('show');
     }
   }
-  if (playing && cranes.list.filter((c) => c.state === 'hover').length < 3) cranes.spawn(player.x);
-  if (playing && stick.touched) elapsed += dt;
+  if (playing && !inside && cranes.list.filter((c) => c.state === 'hover').length < 3) cranes.spawn(player.x);
+  if (playing && !inside && stick.touched) elapsed += dt;
   timeN.textContent = fmt(elapsed);
 
   // depth: whoever is nearer the canal is drawn in front
-  const all = [...people, player, ...cranes.list.map((c) => ({ g: c.g, y: c.y + 0.5 }))];
+  const all = [...people, ...(inside ? [] : [player]), ...cranes.list.map((c) => ({ g: c.g, y: c.y + 0.5 }))];
   all.sort((a, b) => a.y - b.y);
   let prev: Element | null = null;
   for (const p of all) { if (p.g.previousElementSibling !== prev) walkers.insertBefore(p.g, prev ? prev.nextSibling : walkers.firstChild); prev = p.g; }
@@ -262,4 +312,4 @@ run((t, dt) => {
   clock.innerHTML = `<b>${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}</b> <span>${period(hrs)}</span>`;
 });
 
-(window as unknown as { __game: unknown }).__game = { player, cranes, people, setTau: (v) => { tau = v; }, get score() { return score; } };
+(window as unknown as { __game: unknown }).__game = { player, cranes, people, home, act, enter, exit, setTau: (v) => { tau = v; }, get score() { return score; }, get inside() { return inside; } };
