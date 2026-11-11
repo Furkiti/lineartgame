@@ -194,7 +194,7 @@ run((t, dt) => {
     if (stick.touched)
         hintN.classList.add('gone');
     // camera eases after you, and leads a little in the direction you face
-    const target = clamp(player.x - vb.w / 2 + player.dir * vb.w * 0.08, 0, W - vb.w);
+    const target = clamp(player.x - vb.w / 2 + player.face * vb.w * 0.08, 0, W - vb.w);
     camX = camX < 0 ? target : lerp(camX, target, 1 - Math.exp(-dt * 3.5));
     vb.x = camX;
     if (VBCAM)
