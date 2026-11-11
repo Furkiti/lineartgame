@@ -1,0 +1,16 @@
+{
+  "name": "lineartgame",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Mürekkep Sokağı — a small joystick game drawn in line art, built on line-art-animation.",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3",
+    "vite": "^7.1.9"
+  }
+}
