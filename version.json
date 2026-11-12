@@ -1,9 +1,9 @@
 {
   "name": "Mürekkep Sokağı",
-  "version": "0.4.0",
-  "commit": "ba627778260a96b113f0b0fba0c4681983c1b9ae",
-  "shortCommit": "ba62777",
+  "version": "0.4.1",
+  "commit": "b9508215cec20bcd2d053156e8bc5740cb5778e1",
+  "shortCommit": "b950821",
   "branch": "main",
-  "message": "Bir gün: Kenta'nın uçurtması, suşi yakın planı, gece tilkisi, defter",
-  "deployedAt": "2026-11-12T04:09:51Z"
+  "message": "Kamera: dikeyde karakter üçte ikide, önde boşluk, ölü bölge",
+  "deployedAt": "2026-11-12T12:35:18Z"
 }
