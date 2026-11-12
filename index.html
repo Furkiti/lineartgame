@@ -116,6 +116,24 @@
                     box-shadow: 3px 4px 0 color-mix(in srgb, var(--ink) 25%, transparent); transition: opacity .35s calc(var(--i) * .12s), transform .45s calc(var(--i) * .12s) cubic-bezier(.3,1.5,.5,1); }
   .choices button.alt { color: var(--ink); background: var(--paper); }
   .choices.show button { pointer-events: auto; opacity: 1; transform: none; }
+  .shodo { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; opacity: 0; pointer-events: none; touch-action: none; background: #2f3a3f; }
+  .shodo.show { pointer-events: auto; }
+  .shodo-ui { display: none; }
+  .shodo-ui.show { display: block; }
+  .shodo-ui .cu-back { color: #f4eedf; border-color: rgba(244,238,223,.6); }
+  .sh-title { position: absolute; left: 0; right: 0; top: 14px; z-index: 4; text-align: center; color: #f4eedf; pointer-events: none; font: 600 17px "Iowan Old Style", Georgia, serif; }
+  .sh-title span { display: block; font-size: 12px; font-weight: 500; letter-spacing: .2em; opacity: .65; min-height: 14px; }
+  .sh-tip { position: absolute; left: 16px; right: 16px; bottom: max(24px, 5%); z-index: 4; text-align: center; color: #f4eedf; pointer-events: none;
+            font: italic 15px/1.4 "Iowan Old Style", Georgia, serif; opacity: 0; transform: translateY(6px); transition: opacity .5s, transform .5s; }
+  .sh-tip.show { opacity: .95; transform: none; }
+  .sh-order { position: absolute; left: 50%; top: 50%; z-index: 5; width: min(300px, calc(100% - 40px)); transform: translate(-50%, -40%) rotate(-2deg); opacity: 0; pointer-events: none;
+              background: #fbf6ea; color: #1c1c1c; border: 1.4px solid #1c1c1c; border-radius: 3px; padding: 18px 18px 14px; font: 15px/1.5 "Iowan Old Style", Georgia, serif;
+              box-shadow: 5px 6px 0 rgba(0,0,0,.25); transition: opacity .45s, transform .6s cubic-bezier(.2,1.3,.4,1); }
+  .sh-order.show { opacity: 1; pointer-events: auto; transform: translate(-50%, -50%) rotate(-2deg); }
+  .sh-order::before { content: ""; position: absolute; top: -9px; left: 50%; width: 14px; height: 14px; margin-left: -7px; border-radius: 50%; background: #c8423a; box-shadow: inset -2px -2px 0 rgba(0,0,0,.2); }
+  .sh-order p { margin: 0 0 10px; } .sh-order .from { font-style: italic; opacity: .75; }
+  .sh-order b { font-family: "Hiragino Mincho ProN","Yu Mincho",serif; } .sh-order .kanji { color: #c8423a; font-size: 1.3em; }
+  .sh-order button { display: block; margin: 6px auto 0; font: 600 15px Georgia, serif; color: #fdfcf8; background: #c8423a; border: 1.6px solid #1c1c1c; border-radius: 999px; padding: 8px 22px; cursor: pointer; }
   .defter-btn { position: absolute; top: 9px; right: 12px; z-index: 3; width: 44px; height: 44px; border: 0; background: transparent; color: var(--ink); cursor: pointer; padding: 0; }
   .defter-btn svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
   .defter-btn .dots { display: flex; gap: 3px; justify-content: center; margin-top: -2px; }
