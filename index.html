@@ -34,6 +34,9 @@
   #hint { position: absolute; left: 0; right: 0; top: 23%; margin: 0; padding: 0 24px; text-align: center; color: var(--ink);
           font: italic 15px/1.5 "Iowan Old Style", Georgia, serif; opacity: .85; pointer-events: none; transition: opacity 1.2s; }
   #hint.gone { opacity: 0; }
+  .story #hint { left: 50%; right: auto; transform: translateX(-50%); width: max-content; max-width: calc(100% - 40px); padding: 6px 14px; border-radius: 999px;
+                 background: color-mix(in srgb, var(--paper) 86%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--ink) 14%, transparent); opacity: .95; top: 70px; }
+  .story #hint.gone { opacity: 0; }
 
   /* thumb stick, drawn like the scene: a pen circle on paper. It appears under your thumb wherever you touch. */
   #stick { position: absolute; left: 50%; top: 50%; width: 104px; height: 104px; border-radius: 50%; pointer-events: none; z-index: 2;
@@ -49,6 +52,9 @@
   @media (orientation: landscape) and (max-height: 520px) {
     #stick { width: 96px; height: 96px; }
     #hint { top: 30%; }
+    #act { left: auto; right: 18px; bottom: 18px; transform: translateY(8px); }
+    #act.show { transform: none; animation: actInR .45s cubic-bezier(.3,1.6,.5,1); }
+    #act:active { transform: translateY(2px); }
   }
 
   /* one action button for whatever can be done where you stand */
@@ -59,6 +65,78 @@
   #act.show { opacity: 1; transform: translate(-50%, 0); pointer-events: auto; }
   #act:active { transform: translate(-50%, 2px); box-shadow: 1px 2px 0 color-mix(in srgb, var(--ink) 25%, transparent); }
   #fade { position: absolute; inset: 0; background: var(--paper); opacity: 0; pointer-events: none; z-index: 4; }
+
+
+  /* ---------------- story */
+  .inkring { position: absolute; width: 10px; height: 10px; margin: -5px 0 0 -5px; border-radius: 50%; border: 1.6px solid var(--ink); pointer-events: none; z-index: 6;
+             animation: inkring .6s cubic-bezier(.2,.7,.3,1) forwards; opacity: .55; }
+  @keyframes inkring { to { transform: scale(4.2); opacity: 0; border-width: .4px; } }
+
+  #banner { position: absolute; left: 0; right: 0; top: 34%; text-align: center; pointer-events: none; color: var(--ink); opacity: 0; z-index: 3;
+            font-family: "Iowan Old Style", "Hiragino Mincho ProN", Georgia, serif; }
+  #banner b { display: block; font-size: 34px; font-weight: 600; letter-spacing: .08em; }
+  #banner span { display: block; margin-top: 6px; font-size: 15px; font-style: italic; opacity: .85; }
+  #banner b::after { content: ""; display: block; width: 0; height: 1.6px; margin: 8px auto 0; background: var(--ink); transition: width 1s .3s ease-out; }
+  #banner.show { animation: banner 3.4s ease-in-out forwards; }
+  #banner.show b::after { width: 64px; }
+  @keyframes banner { 0% { opacity: 0; transform: translateY(8px); filter: blur(3px); } 18%, 78% { opacity: 1; transform: none; filter: none; } 100% { opacity: 0; transform: translateY(-6px); } }
+
+  #act.show { animation: actIn .45s cubic-bezier(.3,1.6,.5,1); }
+  @keyframes actIn { from { transform: translate(-50%, 10px) scale(.85); opacity: 0; } }
+  @keyframes actInR { from { transform: translateY(10px) scale(.85); opacity: 0; } }
+
+  .brushpad { position: absolute; inset: 0; z-index: 2; display: none; touch-action: none; cursor: crosshair;
+              background: radial-gradient(ellipse 70% 62% at 50% 48%, transparent 55%, color-mix(in srgb, var(--paper) 78%, transparent) 100%); }
+  .brushpad.show { display: block; animation: fadeIn .4s ease-out; }
+  @keyframes fadeIn { from { opacity: 0; } }
+
+  .closeup { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 3; opacity: 0; pointer-events: none; touch-action: none; color: var(--ink); background: var(--paper); }
+  .closeup.show { pointer-events: auto; }
+  .cu-back { position: absolute; left: 12px; top: 10px; z-index: 4; display: none; font: 600 14px "Iowan Old Style", Georgia, serif; color: var(--ink); background: transparent;
+             border: 1.4px solid color-mix(in srgb, var(--ink) 55%, transparent); border-radius: 999px; padding: 6px 12px; cursor: pointer; }
+  .cu-back.show { display: block; }
+  .cu-title { position: absolute; left: 0; right: 0; top: 14px; z-index: 4; text-align: center; pointer-events: none; color: var(--ink); opacity: 0;
+              font: 600 18px "Iowan Old Style", Georgia, serif; letter-spacing: .03em; }
+  .cu-title span { display: block; font-size: 12px; font-weight: 500; letter-spacing: .2em; opacity: .6; margin-bottom: 2px; }
+  .cu-title.show { animation: titleIn .7s cubic-bezier(.2,.8,.3,1) forwards; }
+  @keyframes titleIn { from { opacity: 0; transform: translateY(-8px); } to { opacity: 1; transform: none; } }
+  .cu-tip { position: absolute; left: 16px; right: 16px; bottom: max(26px, 5%); z-index: 4; text-align: center; pointer-events: none; color: var(--ink);
+            font: italic 15px/1.4 "Iowan Old Style", Georgia, serif; opacity: 0; transform: translateY(6px); transition: opacity .5s, transform .5s; }
+  .cu-tip.show { opacity: .9; transform: none; }
+
+  .defter-btn { position: absolute; top: 9px; right: 12px; z-index: 3; width: 44px; height: 44px; border: 0; background: transparent; color: var(--ink); cursor: pointer; padding: 0; }
+  .defter-btn svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+  .defter-btn .dots { display: flex; gap: 3px; justify-content: center; margin-top: -2px; }
+  .defter-btn .dots i { width: 5px; height: 5px; border-radius: 50%; border: 1px solid currentColor; transition: background .4s; }
+  .defter-btn .dots i.on { background: #c8423a; border-color: #c8423a; }
+  .defter-btn.bump { animation: bump .6s cubic-bezier(.3,1.8,.5,1); }
+
+  .defter { position: absolute; inset: 0; z-index: 7; display: grid; place-items: center; padding: 18px; background: color-mix(in srgb, var(--ink) 30%, transparent);
+            opacity: 0; pointer-events: none; transition: opacity .45s; }
+  .defter.show { opacity: 1; pointer-events: auto; }
+  .defter .page { width: min(360px, 100%); background: #fbf6ea; color: #1c1c1c; border: 1.6px solid #1c1c1c; border-radius: 6px; padding: 20px 18px 16px;
+                  box-shadow: 5px 6px 0 rgba(28,28,28,.22); font-family: "Iowan Old Style", Georgia, serif; transform: rotate(-1.2deg) translateY(16px) scale(.96);
+                  transition: transform .6s cubic-bezier(.2,1.3,.4,1); background-image: repeating-linear-gradient(transparent 0 25px, rgba(28,28,28,.07) 25px 26px); }
+  .defter.show .page { transform: rotate(-1.2deg); }
+  .defter .head { display: flex; align-items: baseline; gap: 10px; border-bottom: 1.4px solid #1c1c1c; padding-bottom: 6px; margin-bottom: 12px; }
+  .defter .day { font-size: 24px; font-weight: 600; }
+  .defter .sub { font-style: italic; opacity: .7; }
+  .defter .cells { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .defter .cell { position: relative; text-align: center; }
+  .defter .cell svg { width: 100%; aspect-ratio: 1; border: 1.2px solid rgba(28,28,28,.5); border-radius: 4px; background: #fffdf7; }
+  .defter .cell path { fill: none; stroke: #1c1c1c; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+  .defter .cell.todo path { stroke: rgba(28,28,28,.35); stroke-dasharray: .03 .03; }
+  .defter .cell.done path { stroke-dasharray: 1; stroke-dashoffset: 0; }
+  .defter.show .cell.fresh path { animation: drawIn 1.6s calc(.45s + var(--i) * .7s) ease-in-out both; }
+  @keyframes drawIn { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+  .defter .cell b { display: block; font-size: 12.5px; margin-top: 5px; line-height: 1.25; }
+  .defter .cell small { display: block; font-size: 11px; font-style: italic; opacity: .65; line-height: 1.25; margin-top: 2px; }
+  .defter .seal { position: absolute; right: -4px; top: -6px; width: 26px; height: 26px; display: grid; place-items: center; font-style: normal; font-weight: 800; font-size: 14px;
+                  color: #fbf3e6; background: #c8423a; border-radius: 4px; transform: rotate(8deg); font-family: "Hiragino Mincho ProN","Yu Mincho",serif; }
+  .defter.show .cell.fresh .seal { animation: seal .5s calc(1.6s + var(--i) * .7s) cubic-bezier(.3,1.6,.5,1) both; }
+  @keyframes seal { from { transform: rotate(-10deg) scale(2.2); opacity: 0; } to { transform: rotate(8deg) scale(1); opacity: 1; } }
+  .defter .line { margin: 14px 2px 12px; font-style: italic; font-size: 15px; line-height: 1.45; }
+  .defter .close { display: block; margin: 0 auto; font: 600 15px Georgia, serif; color: #fdfcf8; background: #c8423a; border: 1.6px solid #1c1c1c; border-radius: 999px; padding: 9px 24px; cursor: pointer; }
 
   #win { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; opacity: 0; transition: opacity .6s; }
   #win.show { opacity: 1; pointer-events: auto; }
@@ -81,6 +159,7 @@
     <p id="hint">Bir yere bas ve sürükle, sonuna kadar itersen koşarsın.<br>Sokaktaki kırmızı kâğıt turnaları topla.</p>
     <div id="stick"><div id="knob"></div></div>
     <button id="act" type="button"></button>
+    <div id="banner"></div>
     <div id="fade"></div>
     <div id="win"><div class="box">
       <h2>12 turna toplandı</h2>
