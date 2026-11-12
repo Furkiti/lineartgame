@@ -203,6 +203,8 @@ export function createUI(svg: SVGSVGElement) {
   return {
     root, say, guide, showGesture, hideGesture, stillness, heart, sparkle,
     get guiding() { return cr.on; },
+    /** where the guide crane is (for its own speech balloon) */
+    craneAt(): Vec { return [cr.pos[0], cr.pos[1] - 6]; },
     get speaking() { return balloons.length > 0; },
     /** call each frame: px per scene unit, and the visible rect */
     draw(dt: number, pxPerUnit: number, v: { x: number; y: number; w: number; h: number }) {

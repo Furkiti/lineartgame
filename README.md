@@ -4,9 +4,14 @@ Mürekkeple çizilmiş bir Japon sokağında joystick ile yürüdüğün küçü
 Ekranda bir yere basıp sürükle, joystick parmağının altında çıkar, sonuna kadar itersen koşar. Sokağa dağılmış 12 kırmızı kâğıt
 turnayı en kısa sürede topla. Gün akşama, akşam geceye döner. Yanından geçtiğin insanlar
 selam verir, bankta uyuyan kedi uyanır, telin altında koşarsan serçeler kaçar.
-Oyun bir gün olarak akar: sabah Kenta'nın ağaca takılan uçurtması yerine fırçayla yenisini çizersin,
-akşam evde (yakın planda, ellerinle) suşi yapıp Kenta'yla yersin, gece fenerin altında kıpırdamadan
-beklersen utangaç bir tilki yanına gelir. Uyuyunca defter günün sayfasını yazar.
+Oyun acelesiz bir gün olarak akar. Kırmızı kâğıt turna seni gideceğin yere götürür.
+Sabah Kenta'nın ağaca takılan uçurtması yerine fırçayla yenisini çizersin: ne çizersen uçurtma
+birebir o olur. Kenta akşam yemeğe gelmek ister; evet ya da hayır demek akşamı değiştirir.
+Kapında adının yazdığı bir levha, boş bir fener (istersen üstüne çiz, gece içinden ışık vurur) ve
+bankta bir kedi var (bir oyuncak çiz, istersen eve davet et). Evde bohçanı askıya asar, buz
+dolabından balığı alır, yakın planda kendi ellerinle suşi yaparsın. Gece fenerin altında
+kıpırdamadan beklersen utangaç bir tilki gelir. Uyuyunca defter günün sayfasını senin
+çizimlerinle yazar.
 Eski süreli turna oyunu `?turna` ile açılır.
 
 Her şey canlı SVG olarak çiziliyor, görsel stil ve köy sahnesi

@@ -129,25 +129,46 @@ export function createKite(parent: Element) {
   parent.insertBefore(string, g);
   const tail = el('path', { fill: 'none', stroke: 'currentColor', 'stroke-width': 0.7, 'stroke-linecap': 'round' }, g);
   const bows = [0, 1, 2].map(() => el('path', { fill: '#e3b33d', stroke: 'currentColor', 'stroke-width': 0.5, 'stroke-linejoin': 'round' }, g));
-  const body = el('path', { d: 'M' + KITE.map(pt).join('L') + 'Z', fill: '#c8423a', stroke: 'currentColor', 'stroke-width': 0.9, 'stroke-linejoin': 'round' }, g);
-  const spars = el('path', { d: 'M0 -13 L0 13 M-9 -2 L9 -2', fill: 'none', stroke: 'currentColor', 'stroke-width': 0.6 }, g);
-  const mark = el('path', { d: 'M-3.4 -2 Q0 -6.4 3.4 -2 Q0 2.4 -3.4 -2Z', fill: '#f3ead8', stroke: 'currentColor', 'stroke-width': 0.4 }, g);
-  const len = 4 * Math.hypot(9, 11);
-  body.setAttribute('stroke-dasharray', f(len)); spars.setAttribute('stroke-dasharray', '60');
+  const body = el('path', { fill: '#c8423a', stroke: 'currentColor', 'stroke-width': 0.9, 'stroke-linejoin': 'round' }, g);
+  const spars = el('path', { fill: 'none', stroke: 'currentColor', 'stroke-width': 0.6 }, g);
+  const mark = el('path', { d: '', fill: '#f3ead8', stroke: 'currentColor', 'stroke-width': 0.4 }, g);
+  let len = 100, sparLen = 60, tailAt: Vec = [0, 13];
   let born = -1, from: Vec = [0, 0], pos: Vec = [0, 0], vel: Vec = [0, 0], tail0: Vec[] = [];
   const self = {
     flying: false,
-    /** start drawing the kite where the stroke was */
-    birth(at: Vec) { born = 0; from = at; pos = [...at] as Vec; vel = [0, 0]; self.flying = false; },
+    /**
+     * Make the kite from exactly what was drawn: the stroke, smoothed a touch and closed,
+     * becomes the sail; the spars run between its farthest points; the tail hangs from its lowest.
+     */
+    birth(points: Vec[]) {
+      let pts = points.slice();
+      // one round of corner-cutting keeps the shape but smooths the wobble of a thumb
+      const cut = (a: Vec[]) => { const o: Vec[] = []; for (let i = 0; i < a.length; i++) { const p = a[i], q = a[(i + 1) % a.length]; o.push([p[0] * 0.75 + q[0] * 0.25, p[1] * 0.75 + q[1] * 0.25], [p[0] * 0.25 + q[0] * 0.75, p[1] * 0.25 + q[1] * 0.75]); } return o; };
+      if (pts.length > 6) pts = cut(pts);
+      const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length, cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+      const rel = pts.map((p) => [p[0] - cx, p[1] - cy] as Vec);
+      body.setAttribute('d', 'M' + rel.map(pt).join('L') + 'Z');
+      len = 0; for (let i = 0; i < rel.length; i++) { const a = rel[i], b = rel[(i + 1) % rel.length]; len += Math.hypot(b[0] - a[0], b[1] - a[1]); }
+      body.setAttribute('stroke-dasharray', f(len));
+      const by = (k: 0 | 1, sign: number) => rel.reduce((m, p) => (p[k] * sign > m[k] * sign ? p : m), rel[0]);
+      const top = by(1, -1), bot = by(1, 1), lef = by(0, -1), rig = by(0, 1);
+      spars.setAttribute('d', `M${pt(top)} L${pt(bot)} M${pt(lef)} L${pt(rig)}`);
+      sparLen = Math.hypot(bot[0] - top[0], bot[1] - top[1]) + Math.hypot(rig[0] - lef[0], rig[1] - lef[1]);
+      spars.setAttribute('stroke-dasharray', f(sparLen));
+      tailAt = bot;
+      const size = Math.max(rig[0] - lef[0], bot[1] - top[1]);
+      mark.setAttribute('d', `M${f(-size * 0.09)} 0 a${f(size * 0.09)} ${f(size * 0.09)} 0 1 0 ${f(size * 0.18)} 0 a${f(size * 0.09)} ${f(size * 0.09)} 0 1 0 ${f(-size * 0.18)} 0`);
+      born = 0; from = [cx, cy]; pos = [cx, cy]; vel = [0, 0]; tail0 = []; self.flying = false;
+    },
     get age() { return born; },
     draw(t: number, dt: number, wind: number, hand: Vec | null) {
-      if (born < 0) { g.setAttribute('opacity', '0'); string.setAttribute('d', ''); return; }
+      if (born < 0 || (!hand && born > 3)) { g.setAttribute('opacity', '0'); string.setAttribute('d', ''); return; }
       born += dt;
       // 0–0.7 s: ink draws the outline, colour soaks in. then it lifts into the wind
       const drawT = clamp01(born / 0.7), fillT = clamp01((born - 0.45) / 0.4);
       g.setAttribute('opacity', '1');
       body.setAttribute('stroke-dashoffset', f(len * (1 - easeInOut(drawT))));
-      spars.setAttribute('stroke-dashoffset', f(60 * (1 - easeInOut(clamp01((born - 0.3) / 0.5)))));
+      spars.setAttribute('stroke-dashoffset', f(sparLen * (1 - easeInOut(clamp01((born - 0.3) / 0.5)))));
       body.setAttribute('fill-opacity', f(fillT)); mark.setAttribute('opacity', f(fillT));
       const lift = clamp01((born - 1.0) / 1.6);
       self.flying = lift > 0.6;
@@ -158,14 +179,14 @@ export function createKite(parent: Element) {
         want = [lerp(from[0], sky[0], easeInOut(lift)), lerp(from[1], sky[1], easeInOut(lift))];
       }
       for (const i of [0, 1]) { vel[i] += ((want[i] - pos[i]) * 9 - vel[i] * 4) * dt; pos[i] += vel[i] * dt; }
-      const s = lerp(0.9, 0.8, lift) * backOut(clamp01(born / 0.5));
+      const s = lerp(1, 0.85, lift) * lerp(0.92, 1, backOut(clamp01(born / 0.5)));
       const rot = Math.sin(t * 1.7) * 8 + vel[0] * 0.25 + wind * 4;
       g.setAttribute('transform', `translate(${f(pos[0])} ${f(pos[1])}) rotate(${f(rot)}) scale(${f(s)})`);
       // a tail that trails the motion
-      const tl: Vec[] = [[0, 13]];
+      const tl: Vec[] = [tailAt];
       for (let i = 1; i <= 12; i++) {
-        const prev = tail0[i] ?? [0, 13 + i * 3];
-        const target: Vec = [Math.sin(t * 3 - i * 0.6) * (1 + i * 0.4) - vel[0] * 0.02 * i, 13 + i * 3];
+        const prev = tail0[i] ?? [tailAt[0], tailAt[1] + i * 3];
+        const target: Vec = [tailAt[0] + Math.sin(t * 3 - i * 0.6) * (1 + i * 0.4) - vel[0] * 0.02 * i, tailAt[1] + i * 3];
         tl.push([lerp(prev[0], target[0], 0.25), lerp(prev[1], target[1], 0.25)]);
       }
       tail0 = tl;
@@ -189,7 +210,7 @@ export function createStroke(parent: Element) {
   const n = el('path', { fill: 'currentColor', stroke: 'none' }, parent);
   const dry = el('path', { fill: 'none', stroke: 'currentColor', 'stroke-width': 0.35, opacity: 0.5 }, parent);
   let pts: { p: Vec; w: number }[] = [];
-  let fade = -1;
+  let fade = -1, scale = 1;
   const build = () => {
     if (pts.length < 2) { n.setAttribute('d', pts.length ? `M${f(pts[0].p[0] - 1)} ${f(pts[0].p[1])} a1 1 0 1 0 2 0 a1 1 0 1 0 -2 0` : ''); dry.setAttribute('d', ''); return; }
     const L: Vec[] = [], R: Vec[] = [];
@@ -206,11 +227,15 @@ export function createStroke(parent: Element) {
   };
   return {
     get points() { return pts.map((q) => q.p); },
+    /** thinner ink when the camera is close, so lines look the same on screen */
+    setScale(s: number) { scale = s; },
+    /** keep the ink: a copy of the stroke's shape, placed in another layer */
+    copy(parent: Element) { return el('path', { d: n.getAttribute('d') || '', fill: 'currentColor' }, parent); },
     clear() { pts = []; fade = -1; n.setAttribute('opacity', '1'); dry.setAttribute('opacity', '0.5'); build(); },
     add(p: Vec, speed: number) {
       const last = pts[pts.length - 1];
       if (last && Math.hypot(p[0] - last.p[0], p[1] - last.p[1]) < 0.9) return;
-      const w = lerp(1.7, 0.75, clamp01(speed / 220));
+      const w = lerp(1.7, 0.75, clamp01(speed / 220)) * scale;
       pts.push({ p, w: last ? lerp(last.w, w, 0.35) : w });
       build();
     },

@@ -203,7 +203,7 @@ else { card.classList.add('story'); ($('.score') as HTMLElement).style.display =
 const bannerN = $('#banner');
 const ui = STORY ? createUI(svg) : null;
 const story = STORY && ui ? createStory({
-  svg, card, ui, home, player,
+  svg, card, ui, home, player, cat,
   layers: { front, walkers, glow, stroke: strokeL },
   env: {
     setTau: (v) => { tau = v; },
