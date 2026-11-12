@@ -24,11 +24,12 @@ export function buildCanal({ ground, canalL, willowL, glow }, defs) {
   pen(wall, SP * 0.45).setAttribute('d', moss.join(' '));
 
   // ---------- water
-  const water = el('path', { d: `M-10 ${WATER} L${W + 10} ${WATER} L${W + 10} ${H + 10} L-10 ${H + 10}Z` }, canalL);
+  // the water runs on below the frame, so the camera can sit lower on a tall phone
+  const water = el('path', { d: `M-10 ${WATER} L${W + 10} ${WATER} L${W + 10} ${H + 110} L-10 ${H + 110}Z` }, canalL);
   pen(canalL, SP * 0.8).setAttribute('d', `M-10 ${WATER} L${W + 10} ${WATER}`);
   const reflG = el('g', {}, canalL);
   const ripG = el('g', {}, canalL);
-  const lines = Array.from({ length: 46 }, (_, i) => ({ x: rnd(-40, W), y: WATER + 5 + (i % 9) * 8.4 + rnd(-2, 2), len: rnd(10, 34), v: rnd(4, 9), n: pen(ripG, SP * 0.5) }));
+  const lines = Array.from({ length: 64 }, (_, i) => ({ x: rnd(-40, W), y: WATER + 5 + (i % 13) * 8.4 + rnd(-2, 2), len: rnd(10, 34), v: rnd(4, 9), n: pen(ripG, SP * 0.5) }));
   const rings = [];
   const ringG = el('g', {}, canalL);
   const ring = (x, y, n = 1, big = 1) => { for (let i = 0; i < n; i++) rings.push({ x, y, t: -i * 0.22, big, n: el('ellipse', { fill: 'none', stroke: 'currentColor', 'stroke-width': SP * 0.55 }, ringG) }); };

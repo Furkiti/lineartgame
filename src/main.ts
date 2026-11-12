@@ -99,7 +99,7 @@ on(sparrows.hit, () => sparrows.flush());
 on(cat.hit, () => cat.poke());
 on(boat.g, () => boat.poke());
 on(willowL, () => canal.willowPoke());
-const waterHit = el('rect', { x: 0, y: 400, width: W, height: H - 400, fill: 'transparent' }, canalL);
+const waterHit = el('rect', { x: 0, y: 400, width: W, height: H - 300, fill: 'transparent' }, canalL);
 on(waterHit, (e) => { const p = toSvg(e); canal.poke(p.x, p.y); });
 canalL.insertBefore(waterHit, canalL.children[2] || null);
 
@@ -163,6 +163,10 @@ addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key.toLowerCase(
 const VBCAM = !q.has('slide');
 let vb = { x: 0, y: 0, w: W, h: H }, cardW = 1, cardH = 1;
 let cam = { cx: 0, cy: 0, z: 1 }, camSnap = true;
+// framing rules (portrait first): a little zoom, the figure two-thirds down — above the thumb —
+// room ahead of where you walk, and a dead zone so small steps don't move the picture
+const OLD_CAM = q.get('cam') === 'eski';
+let camAnchor = 0, camLead = 0, idleT = 0;
 function frame() {
   const r = card.getBoundingClientRect();
   cardW = r.width; cardH = r.height;
@@ -257,7 +261,26 @@ run((t, dt) => {
   // camera: eases after you and leads a little where you face, or glides to what the story frames
   const view = inside ? home.view : STREET.view;
   // inside, the room is framed a little closer than the street
-  const follow = inside && STORY ? { cx: player.x + player.face * vb.w * 0.05, cy: 324, z: Math.min(1.5, vb.h / 200) } : { cx: player.x + player.face * vb.w * 0.08, cy: H - vb.h / 2, z: 1 };
+  let follow: { cx: number; cy: number; z: number };
+  if (OLD_CAM) follow = inside && STORY ? { cx: player.x + player.face * vb.w * 0.05, cy: 324, z: Math.min(1.5, vb.h / 200) } : { cx: player.x + player.face * vb.w * 0.08, cy: H - vb.h / 2, z: 1 };
+  else {
+    const portrait = cardW / Math.max(1, cardH) < 0.8;
+    const z = inside ? Math.min(1.5, vb.h / 200) : portrait ? 1.08 : 1;
+    const w = vb.w / z, h = vb.h / z;
+    // dead zone: the anchor only moves when you get more than a little way from it
+    const dz = w * 0.1;
+    if (camSnap) camAnchor = player.x;
+    if (player.x - camAnchor > dz) camAnchor = player.x - dz; else if (camAnchor - player.x > dz) camAnchor = player.x + dz;
+    // standing still a while: drift back to centre you
+    idleT = player.moving > 0.05 ? 0 : idleT + dt;
+    if (idleT > 1.2) camAnchor = approach(camAnchor, player.x, 0.6, dt);
+    // lead from where you are actually going, not where you face
+    const vx = Math.cos(player.heading) * player.moving * Math.min(1, player.speed / 30);
+    camLead = approach(camLead, vx * w * 0.17, player.moving > 0.05 ? 1.1 : 0.7, dt);
+    // feet two-thirds of the way down the frame (street level ~366, floor ~362)
+    const ratio = portrait || inside ? 0.67 : 0.76;
+    follow = { cx: camAnchor + camLead, cy: (inside ? 362 : 366) - (ratio - 0.5) * h, z };
+  }
   const want = story?.cam ?? follow;
   if (camSnap) { cam = { ...want }; camSnap = false; }
   else {
@@ -268,7 +291,7 @@ run((t, dt) => {
   const cw = vb.w / cam.z, ch = vb.h / cam.z;
   let cx0 = cam.cx - cw / 2;
   cx0 = view.x1 - view.x0 <= cw ? (view.x0 + view.x1 - cw) / 2 : clamp(cx0, view.x0, view.x1 - cw);
-  const cy0 = clamp(cam.cy - ch / 2, 0, H - ch);
+  const cy0 = clamp(cam.cy - ch / 2, 0, (OLD_CAM || inside ? H : H + 90) - ch);
   vb.x = cx0;
   if (VBCAM) svg.setAttribute('viewBox', `${f(cx0)} ${f(cy0)} ${f(cw)} ${f(ch)}`);
   else svg.style.transform = `translate3d(${f(-vb.x * k)}px, ${f(-vb.y * k)}px, 0)`;
