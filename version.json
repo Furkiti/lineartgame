@@ -1,9 +1,9 @@
 {
   "name": "Mürekkep Sokağı",
-  "version": "0.3.0",
-  "commit": "e8e417ee58d78af4582e0ca0b75b14ef2f364a54",
-  "shortCommit": "e8e417e",
+  "version": "0.4.0",
+  "commit": "ba627778260a96b113f0b0fba0c4681983c1b9ae",
+  "shortCommit": "ba62777",
   "branch": "main",
-  "message": "Eve girilebilsin: mutfakta suşi hazırla, masada ye",
-  "deployedAt": "2026-11-11T16:08:17Z"
+  "message": "Bir gün: Kenta'nın uçurtması, suşi yakın planı, gece tilkisi, defter",
+  "deployedAt": "2026-11-12T04:09:51Z"
 }

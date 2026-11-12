@@ -31,7 +31,7 @@ export function createJoystick(area, base, knob) {
         if (id !== null)
             return;
         const t = e.target;
-        if (t.closest?.('.drag, #win.show, button'))
+        if (t.closest?.('.drag, #win.show, button, .closeup, .brushpad, .defter'))
             return; // sun/moon scrubbing and the win card keep their own touch
         e.preventDefault();
         id = e.pointerId;
@@ -80,5 +80,6 @@ export function createJoystick(area, base, knob) {
             return { x: (x / m) * k, y: (y / m) * k };
         },
         get touched() { return v.touched; },
+        get active() { return v.active; },
     };
 }

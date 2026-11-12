@@ -12,6 +12,9 @@ import { createPlayer, Y_MIN } from "./player.js";
 import { buildHome } from "./village/home.js";
 import { createCranes } from "./cranes.js";
 import { createJoystick } from "./joystick.js";
+import { createUI } from "./story/ui.js";
+import { createStory } from "./story/story.js";
+import { approach } from "./story/fx.js";
 const GOAL = 12;
 // The village sets thousands of attributes per frame, many to the value they already
 // have (a lamp that is off, a firefly at noon). Skipping those spares the browser from
@@ -44,11 +47,14 @@ const back = layer(scene), birdsL = layer(scene), ground = layer(scene), houses 
 const catL = layer(scene), shadowsL = layer(scene), walkers = layer(scene, INK_FIGURES ? { filter: ink.filter } : {}), canalL = layer(scene), boatL = layer(scene), willowL = layer(scene), petalL = layer(scene, { style: 'pointer-events:none' });
 // screen-blending the glows makes Safari composite the whole scene off-screen every frame
 const glow = layer(svg, { style: (q.has('blend') ? 'mix-blend-mode:screen;' : '') + 'pointer-events:none' });
+const strokeL = layer(svg, { style: 'pointer-events:none' }); // brush ink drawn by the player
 // ------------------------------------------------------------------ time
-let tau = q.has('tau') ? +q.get('tau') : q.has('start') ? +q.get('start') : 0.64;
+// the story is the default; ?turna brings back the timed paper-crane game
+const STORY = !q.has('turna');
+let tau = q.has('tau') ? +q.get('tau') : q.has('start') ? +q.get('start') : STORY ? 0.3 : 0.64;
 let scrub = null;
 const frozenTau = q.has('tau');
-const DAY_SECONDS = q.has('day') ? +q.get('day') : 150;
+const DAY_SECONDS = q.has('day') ? +q.get('day') : STORY ? 420 : 150;
 // ------------------------------------------------------------------ wind from the pointer
 let wind = 0.3, windTarget = 0.3, lastX = null, lastT = 0;
 svg.addEventListener('pointermove', (e) => {
@@ -118,7 +124,7 @@ const stick = createJoystick(card, $('#stick'), $('#knob'));
 const home = buildHome(svg);
 const DOOR = { x: 826, w: 24 };
 const STREET = { bounds: { x0: 14, x1: 946 }, view: { x0: 0, x1: W } };
-let inside = false, fade = 0, fadeTo = 0, pending = null, hintUntil = -1, tNow = 0;
+let inside = false, fade = 0, fadeTo = 0, pending = null, hintUntil = -1, tNow = 0, tipUntil = -1;
 const fadeN = $('#fade'), actN = $('#act');
 const go = (fn) => { if (!pending) {
     pending = fn;
@@ -126,15 +132,15 @@ const go = (fn) => { if (!pending) {
 } };
 function enter() {
     inside = true;
-    [skyL, scene, glow].forEach((n) => (n.style.display = 'none'));
+    [skyL, scene, glow, strokeL].forEach((n) => (n.style.display = 'none'));
     home.root.style.display = '';
     home.actors.appendChild(player.g);
     player.x = home.spawn.x;
     player.y = home.spawn.y;
     player.setHeading(Math.PI / 2);
     player.bounds = home.bounds;
-    camX = -1;
-    if (home.made === 0) {
+    camSnap = true;
+    if (!STORY && home.made === 0) {
         hintN.innerHTML = 'Mutfağa geç, tezgâhta suşi hazırla.';
         hintN.classList.remove('gone');
         hintUntil = tNow + 4;
@@ -142,37 +148,45 @@ function enter() {
 }
 function exit() {
     inside = false;
-    [skyL, scene, glow].forEach((n) => (n.style.display = ''));
+    [skyL, scene, glow, strokeL].forEach((n) => (n.style.display = ''));
     home.root.style.display = 'none';
     walkers.appendChild(player.g);
     player.x = DOOR.x;
     player.y = Y_MIN + 3;
     player.setHeading(Math.PI / 2);
     player.bounds = STREET.bounds;
-    camX = -1;
+    camSnap = true;
 }
 const atDoor = () => !inside && Math.abs(player.x - DOOR.x) < DOOR.w && player.y < 362;
 function act() {
     if (pending || winN.classList.contains('show'))
+        return;
+    if (story?.act())
         return;
     if (!inside) {
         if (atDoor())
             go(enter);
         return;
     }
-    if (home.act(player) === 'exit')
+    const r = home.act(player);
+    if (r === 'exit')
         go(exit);
+    else if ((r === 'cook' || r === 'sleep') && story)
+        story.onHome(r);
 }
 actN.addEventListener('click', act);
 addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key.toLowerCase() === 'e') {
     e.preventDefault();
     act();
 } });
-// ------------------------------------------------------------------ camera: the card follows you
+// ------------------------------------------------------------------ camera: follows you, or frames what the story wants
 const VBCAM = !q.has('slide');
-let vb = { x: 0, y: 0, w: W, h: H }, camX = -1;
+let vb = { x: 0, y: 0, w: W, h: H }, cardW = 1, cardH = 1;
+let cam = { cx: 0, cy: 0, z: 1 }, camSnap = true;
 function frame() {
     const r = card.getBoundingClientRect();
+    cardW = r.width;
+    cardH = r.height;
     const aspect = r.width / Math.max(1, r.height);
     const w = clamp(H * aspect, 200, aspect > 1.2 ? 820 : W);
     const h = Math.min(H, w / aspect);
@@ -216,7 +230,37 @@ function reset() {
         cranes.spawn(player.x);
 }
 $('#again').addEventListener('click', reset);
-reset();
+if (!STORY)
+    reset();
+else {
+    card.classList.add('story');
+    $('.score').style.display = 'none';
+    hintN.textContent = '';
+    hintN.classList.add('gone');
+}
+// ------------------------------------------------------------------ the story: signs in the world, scenes, the close-up kitchen
+const bannerN = $('#banner');
+const ui = STORY ? createUI(svg) : null;
+const story = STORY && ui ? createStory({
+    svg, card, ui, home, player,
+    layers: { front, walkers, glow, stroke: strokeL },
+    env: {
+        setTau: (v) => { tau = v; },
+        fade: (v) => { fadeTo = v; },
+        isFaded: () => fade >= 1,
+        tip: (text, sticky = false) => { if (text) {
+            hintN.textContent = text;
+            hintN.classList.remove('gone');
+            tipUntil = sticky ? Infinity : tNow + 4.5;
+        }
+        else {
+            hintN.classList.add('gone');
+            tipUntil = -1;
+        } },
+        banner: (a, b) => { bannerN.innerHTML = `<b>${a}</b><span>${b}</span>`; bannerN.classList.remove('show'); void bannerN.offsetWidth; bannerN.classList.add('show'); },
+    },
+}) : null;
+card.addEventListener('pointerdown', (e) => story?.touch(e), true);
 const near = (a, b, dx, ay, by, dy) => Math.abs(a - b) < dx && Math.abs(ay - by) < dy;
 let cdCat = 0, cdBirds = 0, cdTree = 0;
 const clock = $('#clock');
@@ -247,7 +291,7 @@ run((t, dt) => {
     tNow = t;
     let j = stick.read();
     const lock = inside ? home.lock : null;
-    if (pending || lock)
+    if (pending || lock || story?.freeze)
         j = { x: 0, y: 0 };
     if (lock) {
         const e = 1 - Math.exp(-dt * 10);
@@ -257,8 +301,12 @@ run((t, dt) => {
     player.faceTo = lock ? lock.heading : null;
     player.pose = inside ? home.pose : { work: 0, chop: 0, hold: 0 };
     player.update(t, dt, j.x, j.y, P, wind);
-    if (stick.touched && t > hintUntil)
+    if (!STORY && stick.touched && t > hintUntil)
         hintN.classList.add('gone');
+    if (STORY && tipUntil > 0 && t > tipUntil) {
+        hintN.classList.add('gone');
+        tipUntil = -1;
+    }
     if (inside)
         home.draw(t, dt, P, player);
     // fade through the paper when going in or out
@@ -269,19 +317,40 @@ run((t, dt) => {
         fadeTo = 0;
     }
     fadeN.style.opacity = f(fade);
-    const label = pending ? null : inside ? home.prompt(player) : atDoor() && !winN.classList.contains('show') ? 'İçeri gir' : null;
+    story?.update({ t, dt, P, wind, tau, inside, base: { w: vb.w, h: vb.h }, stickActive: stick.active, stickTouched: stick.touched });
+    const sp = story ? story.prompt() : null;
+    const label = pending || sp === '' ? null : sp ?? (inside ? home.prompt(player) : atDoor() && !winN.classList.contains('show') ? 'İçeri gir' : null);
     if (label && actN.textContent !== label)
         actN.textContent = label;
     actN.classList.toggle('show', !!label);
-    // camera eases after you, and leads a little in the direction you face
+    // camera: eases after you and leads a little where you face, or glides to what the story frames
     const view = inside ? home.view : STREET.view;
-    const target = view.x1 - view.x0 <= vb.w ? (view.x0 + view.x1 - vb.w) / 2 : clamp(player.x - vb.w / 2 + player.face * vb.w * 0.08, view.x0, view.x1 - vb.w);
-    camX = camX < 0 ? target : lerp(camX, target, 1 - Math.exp(-dt * 3.5));
-    vb.x = camX;
+    // inside, the room is framed a little closer than the street
+    const follow = inside && STORY ? { cx: player.x + player.face * vb.w * 0.05, cy: 324, z: Math.min(1.5, vb.h / 200) } : { cx: player.x + player.face * vb.w * 0.08, cy: H - vb.h / 2, z: 1 };
+    const want = story?.cam ?? follow;
+    if (camSnap) {
+        cam = { ...want };
+        camSnap = false;
+    }
+    else {
+        const rate = story?.cam ? 2.4 : 3.5;
+        cam.cx = approach(cam.cx, want.cx, rate, dt);
+        cam.cy = approach(cam.cy, want.cy, rate, dt);
+        cam.z = Math.exp(approach(Math.log(cam.z), Math.log(want.z), rate * 0.9, dt));
+    }
+    const cw = vb.w / cam.z, ch = vb.h / cam.z;
+    let cx0 = cam.cx - cw / 2;
+    cx0 = view.x1 - view.x0 <= cw ? (view.x0 + view.x1 - cw) / 2 : clamp(cx0, view.x0, view.x1 - cw);
+    const cy0 = clamp(cam.cy - ch / 2, 0, H - ch);
+    vb.x = cx0;
     if (VBCAM)
-        svg.setAttribute('viewBox', `${f(vb.x)} ${f(vb.y)} ${f(vb.w)} ${f(vb.h)}`);
+        svg.setAttribute('viewBox', `${f(cx0)} ${f(cy0)} ${f(cw)} ${f(ch)}`);
     else
         svg.style.transform = `translate3d(${f(-vb.x * k)}px, ${f(-vb.y * k)}px, 0)`;
+    if (ui) {
+        const ppu = Math.max(cardW / cw, cardH / ch), vw = cardW / ppu, vh = cardH / ppu;
+        ui.draw(dt, ppu, { x: cx0 + (cw - vw) / 2, y: cy0 + (ch - vh), w: vw, h: vh });
+    }
     sky.draw(tau, t, dt, P, wind);
     street.applyRed(P);
     const sinceDusk = (tau - 0.75 + 1) % 1;
@@ -357,9 +426,9 @@ run((t, dt) => {
             }
             if (k === 'kid') {
                 spawn[k] = rnd(12, 22);
-                if (dayish)
+                if (dayish && !STORY)
                     addPerson('kid');
-            }
+            } // in the story, Kenta is the only boy on the street
         }
     }
     for (let i = people.length - 1; i >= 0; i--) {
@@ -397,13 +466,13 @@ run((t, dt) => {
             winN.classList.add('show');
         }
     }
-    if (playing && !inside && cranes.list.filter((c) => c.state === 'hover').length < 3)
+    if (!STORY && playing && !inside && cranes.list.filter((c) => c.state === 'hover').length < 3)
         cranes.spawn(player.x);
-    if (playing && !inside && stick.touched)
+    if (!STORY && playing && !inside && stick.touched)
         elapsed += dt;
     timeN.textContent = fmt(elapsed);
     // depth: whoever is nearer the canal is drawn in front
-    const all = [...people, ...(inside ? [] : [player]), ...cranes.list.map((c) => ({ g: c.g, y: c.y + 0.5 }))];
+    const all = [...people, ...(inside ? [] : [player]), ...(story ? story.sortables() : []), ...cranes.list.map((c) => ({ g: c.g, y: c.y + 0.5 }))];
     all.sort((a, b) => a.y - b.y);
     let prev = null;
     for (const p of all) {
@@ -414,4 +483,4 @@ run((t, dt) => {
     const hrs = tau * 24, h = Math.floor(hrs), m = Math.floor((hrs - h) * 60);
     clock.innerHTML = `<b>${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}</b> <span>${period(hrs)}</span>`;
 });
-window.__game = { player, cranes, people, home, act, enter, exit, setTau: (v) => { tau = v; }, get score() { return score; }, get inside() { return inside; } };
+window.__game = { player, cranes, people, home, act, enter, exit, story, ui, get tau() { return tau; }, setTau: (v) => { tau = v; }, get score() { return score; }, get inside() { return inside; } };

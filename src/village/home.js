@@ -35,6 +35,7 @@ const SPOT = {
     door: 40, // genkan door: come in / go out
     table: 186, // the chabudai
     cook: 262, // stand here to work at the cutting board
+    futon: 116, // the bedding, laid out at night
 };
 const DISH_HOME = [280.5, 315]; // the cutting board's top, middle of the three pieces
 const TABLE_TOP = [186, 335.4];
@@ -181,6 +182,12 @@ export function buildHome(svg) {
     const zab = [C_(house, 'M146 352 Q145 348 150 347.6 L166 347.6 Q171 348 170 352 Q170 355 165 355 L151 355 Q146 355 146 352Z', rgb(COL.red), SP * 0.7),
         C_(house, 'M202 352 Q201 348 206 347.6 L222 347.6 Q227 348 226 352 Q226 355 221 355 L207 355 Q202 355 202 352Z', rgb(COL.red), SP * 0.7)];
     P_(house, 'M158 349 l0 4 M156 351 l4 0 M214 349 l0 4 M212 351 l4 0', SP * 0.5);
+    // bedding laid out at night in front of the tokonoma
+    const futon = el('g', { opacity: 0 }, house);
+    C_(futon, 'M92 352 Q91 347 97 347 L141 347 Q147 347 146 352 L146 357 Q146 361 140 361 L98 361 Q92 361 92 357Z', PAPER, SP * 0.8);
+    const quilt = C_(futon, 'M104 348.6 L144 348.6 Q146 349 146 352 L146 357 Q146 360.6 141 360.6 L104 360.6Z', rgb(COL.indigo), SP * 0.7);
+    P_(futon, 'M112 349 l0 11 M122 349 l0 11 M132 349 l0 11', SP * 0.35);
+    C_(futon, 'M94 349.6 Q94 348 98 348 L101 348 Q103 348 103 350 L103 352 Q103 354 101 354 L97 354 Q94 354 94 352Z', PAPER, SP * 0.6);
     const tableTop = C_(house, `M162 335.4 Q162 331.6 186 331.6 Q210 331.6 210 335.4 L210 338 Q210 339.4 186 339.4 Q162 339.4 162 338Z`, rgb(COL.wood), SP * 0.8);
     P_(house, 'M162 335.6 Q186 339 210 335.6', SP * 0.45);
     P_(house, 'M167 339 L167 350 M205 339 L205 350 M171 339.2 L171 347', SP * 1.1);
@@ -252,7 +259,7 @@ export function buildHome(svg) {
         C_(rice, 'M-3.4 0 Q-3.7 -3.3 0 -3.5 Q3.7 -3.3 3.4 0Z', PAPER, SP * 0.55);
         P_(rice, 'M-1.6 -1.4 l0.5 0 M1 -2.2 l0.5 0 M0.4 -0.8 l0.5 0', SP * 0.4);
         const slice = el('g', {}, g);
-        const tuna = i === 1;
+        const tuna = false; // all three are salmon, cut from one block
         C_(slice, 'M-4 -2.4 Q0 -4.8 4.2 -2.8 Q4.6 -1.5 3.6 -1.1 Q0 -2.4 -3.7 -0.9 Q-4.6 -1.3 -4 -2.4Z', rgb(tuna ? COL.tuna : COL.salmon), SP * 0.55);
         if (!tuna)
             el('path', { d: 'M-2.4 -2.4 q1 -0.8 2 -1 M0.6 -2.8 q1 -0.5 2 -0.4', fill: 'none', stroke: '#fff3e6', 'stroke-width': 0.45, 'stroke-linecap': 'round' }, slice);
@@ -272,10 +279,10 @@ export function buildHome(svg) {
         { label: 'Nigiri yap', dur: 1.6, chop: 0 },
         { label: 'Tabağa koy', dur: 1.0, chop: 0 },
     ];
-    let step = 0, anim = -1, eaten = 0, eatT = -1, made = 0, resetT = -1;
+    let step = 0, anim = -1, eaten = 0, eatT = -1, made = 0, resetT = -1, futonOp = 0;
     const lock = { x: IX + SPOT.cook, y: 352, heading: -0.66 };
     const near = (pl, x, dx) => Math.abs(pl.x - (IX + x)) < dx && pl.y < 364;
-    const where = (pl) => near(pl, SPOT.door, 24) ? 'door' : near(pl, SPOT.cook, 20) ? 'cook' : near(pl, SPOT.table, 30) ? 'table' : null;
+    const where = (pl) => near(pl, SPOT.door, 24) ? 'door' : near(pl, SPOT.cook, 20) ? 'cook' : near(pl, SPOT.table, 30) ? 'table' : near(pl, SPOT.futon, 20) ? 'futon' : null;
     const api = {
         root, actors,
         bounds: { x0: IX + 14, x1: IX + IW - 14 },
@@ -283,6 +290,15 @@ export function buildHome(svg) {
         spawn: { x: IX + 44, y: 356 },
         /** The figure stands still at the board while a step plays. */
         get lock() { return anim >= 0 ? lock : null; },
+        /** the story allows sleep (at night, when the day is done) */
+        canSleep: false,
+        get step() { return step; },
+        get eaten() { return eaten; },
+        /** the close-up sets how far the recipe got */
+        setStep(n) { if (step < 5) {
+            step = n;
+            anim = -1;
+        } },
         /** Arm pose targets for the figure. */
         pose: { work: 0, chop: 0, hold: 0 },
         /** The label of what can be done here, or null. */
@@ -293,13 +309,15 @@ export function buildHome(svg) {
             if (w === 'door')
                 return step === 5 ? null : 'Dışarı çık';
             if (w === 'cook' && step < 4)
-                return STEPS[step].label;
+                return step === 0 ? 'Suşi hazırla' : 'Suşiye devam et';
             if (w === 'cook' && step === 4)
                 return 'Tabağı al';
             if (w === 'table' && step === 5)
                 return 'Masaya koy';
             if (w === 'table' && step === 6)
                 return `Ye · ${3 - eaten} kaldı`;
+            if (w === 'futon' && api.canSleep && step !== 5)
+                return 'Uyu';
             return null;
         },
         /** Do it. Returns 'exit' when the figure should go back out to the street. */
@@ -310,10 +328,10 @@ export function buildHome(svg) {
             const w = where(pl);
             if (w === 'door')
                 return 'exit';
-            if (w === 'cook' && step < 4) {
-                anim = 0;
-                return null;
-            }
+            if (w === 'cook' && step < 4)
+                return 'cook';
+            if (w === 'futon')
+                return 'sleep';
             if (w === 'cook' && step === 4) {
                 step = 5;
                 top.appendChild(dish);
@@ -343,6 +361,9 @@ export function buildHome(svg) {
             bulb.setAttribute('fill', rgb(mix(P.paper, hex('#fff1c9'), lit)));
             glows.forEach((g, i) => g.setAttribute('opacity', f(lit * (i ? 0.75 : 0.95) * (0.94 + 0.06 * Math.sin(t * 5.3 + i)))));
             tatami.setAttribute('fill', tint(COL.tatami, P, 0.5));
+            futonOp += ((api.canSleep ? 1 : 0) - futonOp) * Math.min(1, dt * 3);
+            futon.setAttribute('opacity', f(futonOp));
+            quilt.setAttribute('fill', tint(COL.indigo, P));
             heri.setAttribute('stroke', tint(COL.heri, P));
             zab.forEach((z) => z.setAttribute('fill', tint(COL.red, P)));
             tableTop.setAttribute('fill', tint(COL.wood, P));
