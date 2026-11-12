@@ -53,7 +53,18 @@ export function createStory(o) {
     plateText.textContent = '旅人';
     el('path', { d: `M${PLATE[0] - 2} ${PLATE[1] + 7} l2 -1.6 l2 1.6 l-2 1.6Z`, fill: '#c8423a' }, homeFront);
     el('path', { d: 'M870 302 L884 302 L884 315 L870 315Z M872 306 L882 306', fill: '#a8794d', stroke: 'currentColor', 'stroke-width': 0.6 }, homeFront);
-    el('path', { d: 'M884 303 L884 296 L889 297.6 L884 299.4', fill: '#c8423a', stroke: 'currentColor', 'stroke-width': 0.4 }, homeFront);
+    const mailFlag = el('path', { d: 'M884 303 L884 293 L890 294.8 L884 296.8', fill: '#c8423a', stroke: 'currentColor', 'stroke-width': 0.4 }, homeFront);
+    const MAIL_X = 877;
+    const letterN = document.createElement('div');
+    letterN.className = 'letter';
+    letterN.innerHTML = `<div class="paper"><p class="to">Sevgili yeni komşum,</p>
+    <p>Bu akşam sokağın batı ucunda, kanalın döndüğü yerde <b>yaz panayırı</b> var.
+    Fenerler yanacak, davul çalacak, takoyaki kokusu her yeri saracak. Hava kararınca havai fişekler de var.</p>
+    <p>Gelirsen sevinirim. Kenta da orada olur, eminim.</p>
+    <p class="from">— Hana <i>花</i></p><button type="button">Katla</button></div>`;
+    card.appendChild(letterN);
+    let letterClosed = false;
+    letterN.querySelector('button').addEventListener('click', () => { letterN.classList.remove('show'); letterClosed = true; sfx.paper(); });
     // the lantern: whatever you draw on it stays, and glows at night
     const L = LANTERN;
     const lanternD = `M${L.x - L.r * 0.75} ${L.top + 4} Q${L.x - L.r * 1.18} ${L.top + 4 + L.h / 2} ${L.x - L.r * 0.75} ${L.top + 4 + L.h} L${L.x + L.r * 0.75} ${L.top + 4 + L.h} Q${L.x + L.r * 1.18} ${L.top + 4 + L.h / 2} ${L.x + L.r * 0.75} ${L.top + 4}Z`;
@@ -74,13 +85,14 @@ export function createStory(o) {
     const notebook = createNotebook(card);
     const q = {
         kite: 'sad', dinner: '', sushi: false, fox: false,
-        lantern: false, toy: false, catHome: false, fresh: new Set(), day: 1, slept: 0,
+        lantern: false, toy: false, catHome: false, letter: false, fair: false, fresh: new Set(), day: 1, slept: 0,
     };
     let kiteLine = [];
     const entries = () => [
         { id: 'kite', title: 'Kenta’nın uçurtması', hint: 'Kiraz ağacının altında biri üzgün.', sketch: kiteLine.length ? sketchOf([[...kiteLine, kiteLine[0]]]) : SKETCH.kite, done: q.kite === 'done', fresh: q.fresh.has('kite') },
         { id: 'lantern', title: 'Kapımın feneri', hint: 'Kapının yanındaki fener bomboş.', sketch: q.lantern ? sketchOf(lanternLines) : SKETCH.lantern, done: q.lantern, fresh: q.fresh.has('lantern') },
         { id: 'toy', title: q.catHome ? 'Eve gelen kedi' : 'Kedinin oyuncağı', hint: 'Bankta bir kedi uyukluyor.', sketch: q.toy ? sketchOf([toy.line]) : SKETCH.cat, done: q.toy, fresh: q.fresh.has('toy') },
+        { id: 'fair', title: 'Yaz panayırı', hint: q.letter ? 'Sokağın batı ucunda, akşam.' : 'Posta kutusunda bir şey var.', sketch: SKETCH.fair, done: q.fair, fresh: q.fresh.has('fair') },
         { id: 'sushi', title: q.dinner === 'kenta' ? 'Kenta’yla akşam yemeği' : q.dinner === 'alone' ? 'Sessiz bir akşam yemeği' : 'Akşam yemeği', hint: 'Mutfakta suşi yap.', sketch: SKETCH.sushi, done: q.sushi, fresh: q.fresh.has('sushi') },
         { id: 'fox', title: 'Gece misafiri', hint: 'Gece fenerin altında… sessizce.', sketch: SKETCH.fox, done: q.fox, fresh: q.fresh.has('fox') },
     ];
@@ -88,10 +100,10 @@ export function createStory(o) {
     defterBtn.type = 'button';
     defterBtn.className = 'defter-btn';
     defterBtn.setAttribute('aria-label', 'Defter');
-    defterBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M5 3h11a3 3 0 0 1 3 3v15H8a3 3 0 0 1-3-3Z M8 3v18 M11 8h5 M11 11h5"/></svg><span class="dots">${'<i></i>'.repeat(5)}</span>`;
+    defterBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M5 3h11a3 3 0 0 1 3 3v15H8a3 3 0 0 1-3-3Z M8 3v18 M11 8h5 M11 11h5"/></svg><span class="dots">${'<i></i>'.repeat(6)}</span>`;
     card.appendChild(defterBtn);
     const dots = [...defterBtn.querySelectorAll('.dots i')];
-    const refreshDots = () => { [q.kite === 'done', q.lantern, q.toy, q.sushi, q.fox].forEach((d, i) => dots[i].classList.toggle('on', d)); };
+    const refreshDots = () => { [q.kite === 'done', q.lantern, q.toy, q.fair, q.sushi, q.fox].forEach((d, i) => dots[i].classList.toggle('on', d)); };
     defterBtn.addEventListener('click', () => {
         sfx.tap();
         notebook.show({ dayN: q.day, subtitle: 'bugün', entries: entries(), sentence: daySentence(false), button: 'Kapat' });
@@ -111,6 +123,8 @@ export function createStory(o) {
             s.push('kapımın fenerine resim yaptım');
         if (q.toy)
             s.push(q.catHome ? 'bir kedi eve geldi' : 'bankta bir kediyle oynadık');
+        if (q.fair)
+            s.push('panayırın fenerleri altında dolaştım');
         if (q.sushi)
             s.push(q.dinner === 'kenta' ? 'Kenta’yla suşi yedik' : 'akşamı sessizce, suşiyle geçirdim');
         if (q.fox)
@@ -208,7 +222,17 @@ export function createStory(o) {
     const toDoor = () => setObj(() => [DOOR_X, 300], () => ctx.inside, false);
     // ------------------------------------------------------------------ scenes
     function* intro() {
-        yield 0.6;
+        yield 0.05;
+        if (!env.isOpened()) {
+            // behind the shoji the camera waits up in the morning sky, then tilts down to you
+            cam = fit(player.x - 50, 24, player.x + 50, 170, 3);
+            yield () => env.isOpened();
+            yield 1.9;
+            cam = null;
+            yield 2.6;
+        }
+        else
+            yield 0.6;
         env.banner(`${q.day}. gün`, 'Sabah. Sokak yavaşça uyanıyor.');
         yield 3;
         // teach walking once: a ghost hand drags on the ground beside you
@@ -502,9 +526,33 @@ export function createStory(o) {
         if (!q.lantern) {
             ui.sparkle(() => [L.x, L.cy]);
             think('Kapımın feneri bomboş…', 2.6);
-            yield 2.4;
+            yield 2.6;
             ui.sparkle(null);
         }
+        if (!q.letter) {
+            ui.sparkle(() => [MAIL_X, 300]);
+            think('Posta kutumun bayrağı kalkık. Bir mektup var!', 3);
+            yield 3;
+            ui.sparkle(null);
+        }
+        mode = 'walk';
+        cam = null;
+    }
+    function* readLetter() {
+        mode = 'cine';
+        cam = fit(MAIL_X - 50, 260, MAIL_X + 30, 380, 3);
+        player.faceTo = -Math.PI / 2;
+        yield 0.9;
+        mailFlag.setAttribute('d', 'M884 303 L894 303 L892.4 309 L884 307');
+        sfx.paper();
+        letterClosed = false;
+        letterN.classList.add('show');
+        yield () => letterClosed;
+        q.letter = true;
+        player.faceTo = null;
+        think('Panayır… sokağın batı ucunda. Akşam bakarım.', 3);
+        env.tip('Panayır sokağın batı ucunda. İstediğin zaman gidebilirsin.');
+        yield 1;
         mode = 'walk';
         cam = null;
     }
@@ -574,7 +622,7 @@ export function createStory(o) {
         cam = null;
         toLamp();
     }
-    let stillT = 0, foxSit = 0, foxDone = 0, toldStill = false, sunTaught = false, insideKey = '', arrived = false, ateSeen = 0;
+    let stillT = 0, foxSit = 0, foxDone = 0, toldStill = false, insideKey = '', arrived = false, ateSeen = 0;
     function* foxMoment() {
         mode = 'cine';
         q.fox = true;
@@ -618,8 +666,10 @@ export function createStory(o) {
     const nearLantern = () => Math.abs(player.x - L.x) < 20;
     const nearCat = () => Math.abs(player.x - CAT[0]) < 30 && cat.g.style.display !== 'none';
     function offer() {
-        if (ctx.inside || (script && blocks))
+        if (ctx.inside || ctx.fair || (script && blocks))
             return null;
+        if (!q.letter && Math.abs(player.x - MAIL_X) < 13)
+            return { label: 'Mektubu al', go: () => run(readLetter()) };
         if (q.kite !== 'done' && nearKenta())
             return q.kite === 'sad' ? { label: 'Kenta ile konuş', go: () => run(talk()) } : { label: 'Fırçayı çıkar', go: () => startBrush('kite') };
         if (q.kite === 'done' && !q.lantern && nearLantern())
@@ -658,6 +708,13 @@ export function createStory(o) {
                 return true;
             }
             return false;
+        },
+        opened() { sfx.paper(); setTimeout(() => sfx.chime(), 500); },
+        /** first steps into the fair */
+        onFair() {
+            q.fair = true;
+            mark('fair');
+            setTimeout(() => env.banner('Yaz Panayırı', 'Fenerler, davul, takoyaki kokusu…'), 900);
         },
         /** the home asks the story to take over */
         onHome(what) { if (what === 'cook')
@@ -774,24 +831,14 @@ export function createStory(o) {
             if (q.dinner !== 'kenta' && q.kite === 'done' && !q.sushi && c.inside && home.step === 0 && ateSeen >= 3 && !script)
                 run(dinnerAlone());
             // first time at your door
-            if (!arrived && q.kite === 'done' && !c.inside && Math.abs(player.x - DOOR_X) < 50 && mode === 'walk' && !script) {
+            if (!arrived && q.kite === 'done' && !c.inside && !c.fair && Math.abs(player.x - DOOR_X) < 50 && mode === 'walk' && !script) {
                 arrived = true;
                 run(homeArrive());
             }
             // night: the fox under the lamp
             fox.draw(t, dt, { inkT: P.inkT, night: P.night });
-            if (q.sushi && !q.fox && !c.inside && mode === 'walk') {
+            if (q.sushi && !q.fox && !c.inside && !c.fair && mode === 'walk') {
                 const isNight = P.night > 0.45;
-                if (!isNight && !sunTaught && !script) {
-                    sunTaught = true;
-                    const u = (c.tau - 0.225) / 0.55;
-                    if (u > 0 && u < 1) {
-                        const sun = (v) => [40 + 880 * v, 300 - 236 * Math.sin(Math.PI * v)];
-                        env.tip('Geceyi beklemek istemezsen güneşi sürükle.');
-                        ui.showGesture('path', () => { const uu = Math.max(0.02, Math.min(0.98, (ctx.tau - 0.225) / 0.55)); return [sun(uu), sun(Math.min(1, uu + 0.12)), sun(Math.min(1, uu + 0.24))]; }, { period: 2.6 });
-                        hideSunHintAt = t + 7;
-                    }
-                }
                 const atLamp = Math.abs(player.x - LAMP[0]) < 30;
                 if (isNight && atLamp) {
                     const still = !c.stickActive && player.moving < 0.05;
@@ -829,11 +876,6 @@ export function createStory(o) {
                     stillT = 0;
                 }
             }
-            if (hideSunHintAt > 0 && t > hideSunHintAt) {
-                hideSunHintAt = -1;
-                ui.hideGesture();
-                env.tip(null);
-            }
             home.canSleep = c.inside && mode === 'walk' && (c.tau > 0.75 || c.tau < 0.21 || (q.fox && q.slept < q.day));
             // inside: the next place for the recipe; outside: the way home
             if (q.kite === 'done' && !q.sushi && mode === 'walk' && !script) {
@@ -868,7 +910,7 @@ export function createStory(o) {
                             obj = null;
                     }
                 }
-                else {
+                else if (!c.fair) {
                     insideKey = '';
                     if (!obj || obj.inside)
                         toDoor();
@@ -877,7 +919,7 @@ export function createStory(o) {
             // guide crane and the hint ladder
             if (obj && mode === 'walk' && !(script && blocks)) {
                 obj.since += dt;
-                const inScene = obj.inside === c.inside;
+                const inScene = obj.inside === c.inside && !c.fair;
                 const isNear = obj.near();
                 if (!obj.guided && inScene && obj.since > 0.4) {
                     obj.guided = true;
@@ -902,4 +944,3 @@ export function createStory(o) {
         _dbg: { q, kenta, fox, closeup, run, startBrush, get mode() { return mode; }, get picked() { return picked; } },
     };
 }
-let hideSunHintAt = -1;

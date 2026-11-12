@@ -22,7 +22,7 @@ export function palette(tau) {
 const sunArc = (u) => [40 + 880 * u, 300 - 236 * Math.sin(Math.PI * u)];
 const moonArc = (u) => [60 + 840 * u, 290 - 205 * Math.sin(Math.PI * u)];
 const SUN_SPAN = [0.225, 0.55], MOON_SPAN = [0.775, 0.45];
-export function createSky(svg, root, defs, { onScrub, onShoot }) {
+export function createSky(svg, root, defs, { onScrub, onShoot, draggable = true }) {
     // gradient sky
     const grad = el('linearGradient', { id: 'v-sky', x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
     const s0 = el('stop', { offset: 0 }, grad), s1 = el('stop', { offset: 1 }, grad);
@@ -74,8 +74,12 @@ export function createSky(svg, root, defs, { onScrub, onShoot }) {
     let drag = null;
     const toSvg = (e) => { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY; return p.matrixTransform(svg.getScreenCTM().inverse()); };
     const start = (kind) => (e) => { e.preventDefault(); e.stopPropagation(); drag = kind; svg.setPointerCapture?.(e.pointerId); svg.classList.add('scrubbing'); };
-    sunG.addEventListener('pointerdown', start('sun'));
-    moonG.addEventListener('pointerdown', start('moon'));
+    if (draggable) {
+        sunG.addEventListener('pointerdown', start('sun'));
+        moonG.addEventListener('pointerdown', start('moon'));
+    }
+    else
+        [sunG, moonG].forEach((n) => { n.removeAttribute('class'); n.setAttribute('style', 'pointer-events:none'); n.querySelector('title')?.remove(); });
     svg.addEventListener('pointermove', (e) => {
         if (!drag)
             return;
