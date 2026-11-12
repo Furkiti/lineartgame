@@ -104,6 +104,12 @@
             font: italic 15px/1.4 "Iowan Old Style", Georgia, serif; opacity: 0; transform: translateY(6px); transition: opacity .5s, transform .5s; }
   .cu-tip.show { opacity: .9; transform: none; }
 
+  .choices { position: absolute; left: 16px; right: 16px; bottom: max(28px, 6%); z-index: 5; display: flex; flex-direction: column; align-items: center; gap: 10px; pointer-events: none; }
+  .choices button { pointer-events: none; opacity: 0; transform: translateY(10px) scale(.94); min-width: 190px; font: 600 15px "Iowan Old Style", Georgia, serif;
+                    color: #fdfcf8; background: #c8423a; border: 1.6px solid var(--ink); border-radius: 999px; padding: 11px 22px; cursor: pointer;
+                    box-shadow: 3px 4px 0 color-mix(in srgb, var(--ink) 25%, transparent); transition: opacity .35s calc(var(--i) * .12s), transform .45s calc(var(--i) * .12s) cubic-bezier(.3,1.5,.5,1); }
+  .choices button.alt { color: var(--ink); background: var(--paper); }
+  .choices.show button { pointer-events: auto; opacity: 1; transform: none; }
   .defter-btn { position: absolute; top: 9px; right: 12px; z-index: 3; width: 44px; height: 44px; border: 0; background: transparent; color: var(--ink); cursor: pointer; padding: 0; }
   .defter-btn svg { width: 26px; height: 26px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
   .defter-btn .dots { display: flex; gap: 3px; justify-content: center; margin-top: -2px; }
@@ -121,7 +127,7 @@
   .defter .head { display: flex; align-items: baseline; gap: 10px; border-bottom: 1.4px solid #1c1c1c; padding-bottom: 6px; margin-bottom: 12px; }
   .defter .day { font-size: 24px; font-weight: 600; }
   .defter .sub { font-style: italic; opacity: .7; }
-  .defter .cells { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+  .defter .cells { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px 10px; }
   .defter .cell { position: relative; text-align: center; }
   .defter .cell svg { width: 100%; aspect-ratio: 1; border: 1.2px solid rgba(28,28,28,.5); border-radius: 4px; background: #fffdf7; }
   .defter .cell path { fill: none; stroke: #1c1c1c; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }

@@ -140,47 +140,64 @@ export function createCloseup(card, { onStep, onDone, onExit }) {
     fill(knife, 'M-2 6 L8 6 L7 52 L-1 52Z', rgb(C.wood), 1.6);
     const handsFront = mk('g', {}, world);
     const words = mk('g', {}, world);
-    /** A sleeve from below the counter to the wrist, then a hand. */
+    /**
+     * A hand with a short stretch of indigo sleeve that fades out toward the elbow, so the
+     * arms never bar across the counter. dir: where the forearm goes from the wrist (degrees,
+     * 0 = right, 90 = down). ang: how the hand is turned (0 = fingers up).
+     */
+    let armN = 0;
     function arm(parent) {
-        const g = mk('g', {}, parent);
+        const id = `cu-arm-${armN++}`;
+        const grad = mk('linearGradient', { id: id + 'g', gradientUnits: 'userSpaceOnUse' }, svg);
+        mk('stop', { offset: 0, 'stop-color': '#fff' }, grad);
+        mk('stop', { offset: 0.45, 'stop-color': '#fff' }, grad);
+        mk('stop', { offset: 1, 'stop-color': '#000' }, grad);
+        const mask = mk('mask', { id: id + 'm', maskUnits: 'userSpaceOnUse', x: -3000, y: -3000, width: 6000, height: 6000 }, svg);
+        mk('rect', { x: -3000, y: -3000, width: 6000, height: 6000, fill: `url(#${id}g)` }, mask);
+        const g = mk('g', { mask: `url(#${id}m)` }, parent);
         const sleeve = fill(g, '', rgb(C.sleeve), 1.8);
-        const cuff = ink(g, '', 1.2, { opacity: 0.7 });
+        const cuff = ink(g, '', 1.3, { stroke: '#f3ead8' });
         const hand = mk('g', {}, g);
-        const palm = fill(hand, '', PAPER, 1.6);
+        const palm = fill(hand, '', rgb(C.skin), 1.6);
         const lines = ink(hand, '', 1.1);
         let kind = '';
         return {
             g,
-            set(wrist, base, ang, shape, press = 0) {
-                const dx = wrist[0] - base[0], dy = wrist[1] - base[1], l = Math.hypot(dx, dy) || 1, nx = -dy / l, ny = dx / l;
-                const w0 = 19, w1 = 11.5;
-                sleeve.setAttribute('d', `M${f(base[0] + nx * w0)} ${f(base[1] + ny * w0)} Q${f((base[0] + wrist[0]) / 2 + nx * 17)} ${f((base[1] + wrist[1]) / 2 + ny * 17)} ${f(wrist[0] + nx * w1)} ${f(wrist[1] + ny * w1)} L${f(wrist[0] - nx * w1)} ${f(wrist[1] - ny * w1)} Q${f((base[0] + wrist[0]) / 2 - nx * 15)} ${f((base[1] + wrist[1]) / 2 - ny * 15)} ${f(base[0] - nx * w0)} ${f(base[1] - ny * w0)}Z`);
-                const cx = wrist[0] - (dx / l) * 6, cy = wrist[1] - (dy / l) * 6;
-                cuff.setAttribute('d', `M${f(cx + nx * 10.5)} ${f(cy + ny * 10.5)} L${f(cx - nx * 10.5)} ${f(cy - ny * 10.5)}`);
+            set(wrist, dir, ang, shape, press = 0, len = 66) {
+                const a = dir * Math.PI / 180, ux = Math.cos(a), uy = Math.sin(a), nx = -uy, ny = ux;
+                const base = [wrist[0] + ux * len, wrist[1] + uy * len];
+                grad.setAttribute('x1', f(wrist[0]));
+                grad.setAttribute('y1', f(wrist[1]));
+                grad.setAttribute('x2', f(base[0]));
+                grad.setAttribute('y2', f(base[1]));
+                const w0 = 15, w1 = 10.5;
+                sleeve.setAttribute('d', `M${f(wrist[0] + nx * w1)} ${f(wrist[1] + ny * w1)} Q${f(wrist[0] + ux * len * 0.5 + nx * (w1 + 3))} ${f(wrist[1] + uy * len * 0.5 + ny * (w1 + 3))} ${f(base[0] + nx * w0)} ${f(base[1] + ny * w0)} L${f(base[0] - nx * w0)} ${f(base[1] - ny * w0)} Q${f(wrist[0] + ux * len * 0.5 - nx * (w1 + 2))} ${f(wrist[1] + uy * len * 0.5 - ny * (w1 + 2))} ${f(wrist[0] - nx * w1)} ${f(wrist[1] - ny * w1)}Z`);
+                const cx = wrist[0] + ux * 7, cy = wrist[1] + uy * 7;
+                cuff.setAttribute('d', `M${f(cx + nx * 9.6)} ${f(cy + ny * 9.6)} L${f(cx - nx * 9.6)} ${f(cy - ny * 9.6)}`);
                 hand.setAttribute('transform', `translate(${f(wrist[0])} ${f(wrist[1])}) rotate(${f(ang)})`);
                 if (kind !== shape + press.toFixed(2)) {
                     kind = shape + press.toFixed(2);
                     // hands drawn pointing up (−y) from the wrist at 0,0
                     if (shape === 'grip') {
-                        palm.setAttribute('d', 'M-11 2 Q-14 -10 -10 -20 Q-4 -27 6 -25 Q13 -22 12 -12 L12 0 Q8 6 0 6 Q-8 6 -11 2Z');
-                        lines.setAttribute('d', 'M-9 -17 Q-2 -15 4 -18 M-10 -10 Q-2 -8 5 -11 M-10 -3 Q-3 -1 5 -4 M8 -24 Q14 -26 15 -18');
+                        palm.setAttribute('d', 'M-10 2 Q-13 -9 -10 -18 Q-4 -25 5 -23 Q12 -20 11 -11 L11 0 Q7 5 0 5 Q-7 5 -10 2Z');
+                        lines.setAttribute('d', 'M-8 -16 Q-2 -14 4 -16 M-9 -9.5 Q-2 -7.5 4 -10 M-9 -3 Q-3 -1 4 -3.5 M7 -22 Q12 -24 13 -17');
                     }
                     else if (shape === 'press') {
-                        const p = press * 3;
-                        palm.setAttribute('d', `M-11 2 Q-13 -10 -9 -16 L-8 ${f(-40 + p)} Q-8 ${f(-45 + p)} -4 ${f(-45 + p)} Q-1 ${f(-45 + p)} -1 ${f(-40 + p)} L-1 -26 L0 ${f(-42 + p)} Q0 ${f(-47 + p)} 4 ${f(-47 + p)} Q7 ${f(-47 + p)} 7 ${f(-42 + p)} L8 -18 Q13 -14 12 -6 L12 0 Q8 6 0 6 Q-8 6 -11 2Z`);
-                        lines.setAttribute('d', `M-1 -26 L-1 -18 M8 -14 Q11 -16 13 -12`);
+                        const p = press * 2.6;
+                        palm.setAttribute('d', `M-10 2 Q-12 -8 -8 -13 L-6.6 ${f(-31 + p)} Q-6.4 ${f(-35 + p)} -3.4 ${f(-35 + p)} Q-0.6 ${f(-35 + p)} -0.6 ${f(-31 + p)} L-0.4 -19 L0.6 ${f(-33 + p)} Q0.8 ${f(-37 + p)} 3.8 ${f(-37 + p)} Q6.6 ${f(-37 + p)} 6.6 ${f(-33 + p)} L7.4 -14 Q12 -11 11 -5 L11 0 Q7 5 0 5 Q-7 5 -10 2Z`);
+                        lines.setAttribute('d', 'M-0.5 -19 L-0.5 -13 M7 -11 Q10 -12.6 11.6 -9.4');
                     }
                     else if (shape === 'cup') {
-                        palm.setAttribute('d', 'M-12 2 Q-16 -14 -8 -26 Q-2 -32 6 -30 Q2 -24 2 -16 Q4 -8 14 -6 Q16 2 8 6 Q-6 8 -12 2Z');
-                        lines.setAttribute('d', 'M-8 -22 Q-6 -16 -2 -14 M6 -30 Q10 -30 10 -26');
+                        palm.setAttribute('d', 'M-11 2 Q-15 -12 -8 -23 Q-2 -29 5 -27 Q2 -21 2 -14 Q3.6 -7 12.6 -5.4 Q14.6 1.6 7 5 Q-5 7 -11 2Z');
+                        lines.setAttribute('d', 'M-7 -20 Q-5.4 -14.6 -1.8 -12.6 M5 -27 Q9 -27 9 -23');
                     }
                     else {
-                        palm.setAttribute('d', 'M-12 2 Q-14 -14 -10 -26 Q-6 -34 0 -34 Q6 -34 9 -26 Q14 -14 12 0 Q8 6 0 6 Q-8 6 -12 2Z');
-                        lines.setAttribute('d', 'M-6 -30 L-6 -20 M0 -33 L0 -22 M6 -30 L6 -20');
+                        palm.setAttribute('d', 'M-11 2 Q-13 -13 -9 -24 Q-5.4 -31 0 -31 Q5.4 -31 8 -24 Q12.6 -13 11 0 Q7 5 0 5 Q-7 5 -11 2Z');
+                        lines.setAttribute('d', 'M-5.4 -27 L-5.4 -18 M0 -30 L0 -20 M5.4 -27 L5.4 -18');
                     }
                 }
             },
-            tint(P) { sleeve.setAttribute('fill', tint(C.sleeve, P)); },
+            tint(P) { sleeve.setAttribute('fill', tint(C.sleeve, P)); palm.setAttribute('fill', tint(C.skin, P, 0.3)); },
         };
     }
     const rightHand = arm(handsFront), leftHand = arm(handsBack), leftFront = arm(handsFront);
@@ -491,7 +508,7 @@ export function createCloseup(card, { onStep, onDone, onExit }) {
                 const lean = (paddleTip[0] - TUB[0]) * 0.25 + 12;
                 paddle.setAttribute('transform', `translate(${f(paddleTip[0])} ${f(paddleTip[1])}) rotate(${f(lean)})`);
                 const a = lean * Math.PI / 180, hx = paddleTip[0] + Math.sin(a) * 74, hy = paddleTip[1] - Math.cos(a) * 74;
-                rightHand.set([hx + 2, hy + 14], [hx + 230, hy + 330], lean + 8, 'grip');
+                rightHand.set([hx + 2, hy + 12], 62, lean + 6, 'grip');
             }
             // ---------------- 2 · fish
             const x0 = blockX0();
@@ -527,7 +544,7 @@ export function createCloseup(card, { onStep, onDone, onExit }) {
                 // the blade hangs over the dashed line and follows your finger down through the fish
                 const ky = BLOCK.y0 - 66 + Math.min(knifeY, BLOCK.y1 - BLOCK.y0 + 8) + (cutting ? 0 : Math.sin(t * 2.4) * 1.5);
                 knife.setAttribute('transform', `translate(${f(cx + 3)} ${f(ky)}) rotate(180)`);
-                rightHand.set([cx + 4, ky - 30], [cx + 260, ky + 300], 196, 'grip');
+                rightHand.set([cx + 17, ky - 30], 24, -90, 'grip');
             }
             slices.forEach((s, i) => {
                 if (s.t < 0) {
@@ -611,8 +628,10 @@ export function createCloseup(card, { onStep, onDone, onExit }) {
                 const i = holdI >= 0 ? holdI : nigiri.findIndex((n) => n.shape < 1);
                 if (i >= 0) {
                     const m = MOUND[i], p = holdI >= 0 ? pressNow : 0;
-                    leftHand.set([m[0] - 28, m[1] - 2], [m[0] - 260, m[1] + 300], 60, 'cup');
-                    rightHand.set([m[0] + 4, m[1] - 18 + p * 4 - (holdI >= 0 ? 0 : 18)], [m[0] + 250, m[1] + 300], 175, 'press', p);
+                    // the left hand cups the rice from the side; two fingers of the right press its top
+                    leftHand.set([m[0] - 33, m[1] + 4], 150, 38, 'cup');
+                    const lift = holdI >= 0 ? 0 : 7;
+                    rightHand.set([m[0] + 31, m[1] - 22 + p * 2.4 - lift], 18, -101, 'press', p, 58);
                 }
                 if (nigiri.every((n) => n.shape >= 1) && nigiri.every((n) => n.drape > 0.9) && doneT < 0 && stepT > 0.5) {
                     onStep(3);
@@ -651,8 +670,8 @@ export function createCloseup(card, { onStep, onDone, onExit }) {
             // hands while plating: rest out of the way
             handsFront.setAttribute('opacity', f(step === 3 ? 0 : 1));
             handsBack.setAttribute('opacity', f(step === 2 ? 1 : 0));
-            if (step !== 1 && step !== 2)
-                leftHand.set([-200, 600], [-300, 800], 0, 'flat');
+            if (step !== 2)
+                leftHand.set([-400, 800], 90, 0, 'flat');
             void leftFront;
             // ---------------- ghost hand
             ghostOp = approach(ghostOp, ghost ? 1 : 0, 6, dt);

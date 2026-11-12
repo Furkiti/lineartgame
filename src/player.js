@@ -81,8 +81,10 @@ export function createPlayer(parent, x, y) {
     const string = el('path', { fill: 'none', stroke: 'currentColor', 'stroke-width': PEN * 0.45, 'stroke-linecap': 'round' }, headG);
     const hat = paint(headG, C.hat, PEN * 0.85);
     const weave = el('path', { fill: 'none', stroke: 'currentColor', 'stroke-width': PEN * 0.4, 'stroke-linecap': 'round' }, headG);
-    const walk = gait({ kind: 'walk' });
-    const run = gait({ kind: 'run', thigh: 23, shin: 23, stride: 30, lift: 13, period: 0.62, heelKick: 5, ankleY: 118.4, toe: 4.2, heelOff: 12 });
+    // an unhurried walk, and at most a light jog — nobody is late for anything here
+    const walk = gait({ kind: 'walk', period: 1.22, stride: 22 });
+    const run = gait({ kind: 'run', thigh: 23, shin: 23, stride: 24, lift: 9, period: 0.84, heelKick: 3.5, ankleY: 118.4, toe: 4.2, heelOff: 12 });
+    const JOG = 0.5;
     const armS = [spring(70, 10), spring(70, 10)];
     const bend = spring(40, 9);
     const sway = spring(26, 3.2), hatS = spring(30, 4.5);
@@ -98,6 +100,8 @@ export function createPlayer(parent, x, y) {
         faceTo: null,
         /** Both hands, averaged, in scene units (for things carried). */
         hands: [x, y - 30],
+        /** the red bundle on the back (hang it up at home) */
+        carryBundle: true,
         setHeading(h) { heading = wrap(h); },
         /** Heading in radians: 0 faces right, π/2 faces you, π left, -π/2 away. */
         heading: 0,
@@ -110,9 +114,9 @@ export function createPlayer(parent, x, y) {
             go += (want - go) * Math.min(1, dt * (want ? 7 : 5));
             if (go < 0.002)
                 go = 0;
-            const runT = want ? smooth(0.6, 0.92, m) : r;
-            r += (runT - r) * Math.min(1, dt * 4);
-            const rate = lerp(0.8, 1.15, smooth(0.12, 0.6, m));
+            const runT = want ? smooth(0.65, 0.95, m) * JOG : r;
+            r += (runT - r) * Math.min(1, dt * 2.5);
+            const rate = lerp(0.8, 1.0, smooth(0.12, 0.6, m));
             const period = lerp(walk.period / rate, run.period, r);
             phase += (dt / period) * go;
             const speed = lerp(walk.speed * rate, run.speed, r) * FS * go;
@@ -282,6 +286,8 @@ export function createPlayer(parent, x, y) {
                 armDepth[i] = depth(su0, w);
             });
             self.hands = [self.x + (handSum[0] - 40) * FS, self.y + (handSum[1] - 120) * FS];
+            bundleG.style.display = self.carryBundle ? '' : 'none';
+            straps.forEach((pair) => pair.forEach((n) => n.style.display = self.carryBundle ? '' : 'none'));
             // painter's order, nearest last
             const order = [
                 [legG[0], -100 + legDepth[0]], [legG[1], -100 + legDepth[1]],

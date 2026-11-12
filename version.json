@@ -1,9 +1,9 @@
 {
   "name": "Mürekkep Sokağı",
-  "version": "0.4.1",
-  "commit": "b9508215cec20bcd2d053156e8bc5740cb5778e1",
-  "shortCommit": "b950821",
+  "version": "0.5.0",
+  "commit": "e2b6618ef277a9ecc3ec9d73b38c0c48f4e6365d",
+  "shortCommit": "e2b6618",
   "branch": "main",
-  "message": "Kamera: dikeyde karakter üçte ikide, önde boşluk, ölü bölge",
-  "deployedAt": "2026-11-12T12:35:18Z"
+  "message": "Acelesiz bir gün: seçimler, birebir çizimler, ev hayatı",
+  "deployedAt": "2026-11-12T22:38:29Z"
 }

@@ -36,6 +36,8 @@ const SPOT = {
     table: 186, // the chabudai
     cook: 262, // stand here to work at the cutting board
     futon: 116, // the bedding, laid out at night
+    peg: 72, // a peg in the genkan for the bundle
+    icebox: 354, // the wooden icebox in the kitchen
 };
 const DISH_HOME = [280.5, 315]; // the cutting board's top, middle of the three pieces
 const TABLE_TOP = [186, 335.4];
@@ -208,18 +210,36 @@ export function buildHome(svg) {
     C_(house, 'M330 271 L336 271 L335.4 280 L330.6 280Z', rgb(COL.indigo), SP * 0.6);
     C_(house, 'M340 273 L345 273 L344.6 280 L340.4 280Z', PAPER, SP * 0.6);
     C_(house, 'M352 266 Q352 262 357 262 Q362 262 362 266 L362 280 L352 280Z', rgb(COL.woodDark), SP * 0.6);
-    P_(house, 'M300 292 L366 292', SP * 0.7);
+    P_(house, 'M300 292 L334 292', SP * 0.7);
     P_(house, 'M314 292 L314 300 M314 300 q-3 0 -3 3 q0 3 3 3 q3 0 3 -3 q0 -3 -3 -3 M330 292 L330 297', SP * 0.6);
     S_(house, oval(330, 301, 4, 4), SP * 0.5);
     P_(house, 'M327.4 299 l5.2 4 M327.4 303 l5.2 -4', SP * 0.3);
-    // the counter: wooden top, sliding doors below, a sink, the rice tub
-    C_(house, rect(248, 318, 370, 322), rgb(COL.wood), SP * 0.8);
-    S_(house, rect(250, 322, 368, BASE), SP * 0.8);
-    P_(house, 'M289 322 L289 344 M329 322 L329 344', SP * 0.6);
-    [[283, 333], [295, 333], [323, 333], [335, 333], [362, 333]].forEach(([x, y]) => S_(house, oval(x, y, 1.1, 2.2), SP * 0.4));
-    // sink: a dark opening in the top and a bamboo spout
-    B_(house, 'M336 318.4 L358 318.4 L356 320.2 L338 320.2Z');
-    C_(house, 'M346 296 L350 296 L350 307 Q350 310 347 310 L343 310 L343 307.6 L346 307.6Z', rgb(hex('#9fb36a')), SP * 0.6);
+    // the counter: wooden top, sliding doors below, the rice tub
+    C_(house, rect(248, 318, 334, 322), rgb(COL.wood), SP * 0.8);
+    S_(house, rect(250, 322, 332, BASE), SP * 0.8);
+    P_(house, 'M291 322 L291 344', SP * 0.6);
+    [[285, 333], [297, 333]].forEach(([x, y]) => S_(house, oval(x, y, 1.1, 2.2), SP * 0.4));
+    // the wooden icebox: two doors, brass hinges; the upper one opens
+    C_(house, rect(338, 286, 370, BASE), rgb(COL.wood), SP * 0.9);
+    P_(house, 'M338 314 L370 314 M340 344 L340 347 M368 344 L368 347', SP * 0.8);
+    const iceInside = el('g', { opacity: 0 }, house);
+    C_(iceInside, rect(341, 289, 367, 311.4), rgb(COL.woodDark), SP * 0.6);
+    P_(iceInside, 'M341 300 L367 300', SP * 0.5);
+    const iceFish = el('g', {}, iceInside);
+    C_(iceFish, 'M345 297.4 L357 297.4 L357 293 L345 293Z', rgb(COL.salmon), SP * 0.5);
+    P_(iceFish, 'M347 297 L349 293.4 M351 297 L353 293.4', SP * 0.4).setAttribute('stroke', '#fff3e6');
+    C_(iceInside, oval(361, 296, 2, 1.6), PAPER, SP * 0.4);
+    C_(iceInside, 'M344 309 Q352 305.6 360 308.6 Q352 310 344 309Z', rgb(hex('#8fae5a')), SP * 0.5);
+    const iceDoor = el('g', {}, house);
+    C_(iceDoor, rect(341, 289, 367, 311.4), rgb(mix(COL.wood, [255, 245, 225], 0.2)), SP * 0.7);
+    P_(iceDoor, 'M344 292 L364 292 L364 308.4 L344 308.4Z', SP * 0.35);
+    C_(iceDoor, rect(362.4, 297, 364.6, 303), rgb(hex('#c9a24a')), SP * 0.4);
+    C_(house, rect(341, 317, 367, 341), rgb(mix(COL.wood, [255, 245, 225], 0.2)), SP * 0.7);
+    C_(house, rect(362.4, 326, 364.6, 332), rgb(hex('#c9a24a')), SP * 0.4);
+    [[340, 292], [340, 306], [340, 320], [340, 336]].forEach(([x, y]) => C_(house, rect(x - 1, y, x + 1.4, y + 2.6), rgb(hex('#c9a24a')), SP * 0.3));
+    const chill = P_(house, '', SP * 0.4);
+    // a peg by the door for the bundle
+    C_(house, 'M70.6 284 L73.4 284 L74.4 287 L69.6 287Z', rgb(COL.woodDark), SP * 0.5);
     // the cutting board
     C_(house, rect(268, 315, 308, 318), rgb(mix(COL.wood, [255, 245, 225], 0.45)), SP * 0.7);
     P_(house, 'M271 318 L271 318.8 M305 318 L305 318.8', SP * 1.2);
@@ -242,6 +262,22 @@ export function buildHome(svg) {
         el('circle', { cx: 186, cy: 272, r: 70, fill: 'url(#v-warmglow)', opacity: 0 }, glowL),
         el('circle', { cx: 300, cy: 268, r: 52, fill: 'url(#v-warmglow)', opacity: 0 }, glowL),
     ];
+    // the fish you carry from the icebox, the bundle on its peg, a cat asleep on a cushion
+    const carryFish = el('g', { opacity: 0 }, top);
+    C_(carryFish, 'M-6 -2.6 L6 -2.6 L6 2 L-6 2Z', rgb(COL.salmon), SP * 0.5);
+    C_(carryFish, 'M-6.6 -3 L-1 -3 L-2 2.6 L-6.6 2.6Z', PAPER, SP * 0.45);
+    const hung = el('g', { opacity: 0 }, props);
+    const hungBody = C_(hung, 'M-1 -7 Q-8 -6 -7.6 1 Q-7 8 0 8 Q7 8 7.4 1 Q7.6 -6 1 -7Z', rgb(COL.red), SP * 0.7);
+    el('path', { d: 'M-4.4 -2 L4 -2.6 M-5 2 L4.6 1.4 M-3.6 5.4 L3.2 5', fill: 'none', stroke: '#f2e6d0', 'stroke-width': 0.9, 'stroke-linecap': 'round', 'stroke-dasharray': '0.1 3' }, hung);
+    C_(hung, 'M-2.4 -7.6 q-2 -2.6 0 -3.6 q2 0 2.4 2.6 q0.6 -2.6 2.6 -2.6 q1.6 1.4 -0.8 3.6Z', rgb(COL.red), SP * 0.6);
+    const homeCat = el('g', { opacity: 0 }, props);
+    const catBody = C_(homeCat, 'M-9 0 Q-10 -7 -2 -7.6 Q6 -8 8.6 -3 Q10 0 8 1.4 L-7 1.4 Q-9.4 1.4 -9 0Z', PAPER, SP * 0.7);
+    el('path', { d: 'M-4 -7 Q0 -8.6 3 -6.4 Q1 -4 -3 -4.6Z', fill: '#d08a4a' }, homeCat);
+    C_(homeCat, 'M3.6 -5 Q4.4 -9.6 8.6 -8.4 Q11 -6 9.4 -3 Q7 -1.6 4.6 -2.6Z', PAPER, SP * 0.6);
+    C_(homeCat, 'M5 -8 L5.6 -11 L7 -8.6Z M8 -8.4 L9.6 -10.6 L9.6 -7.4Z', PAPER, SP * 0.45);
+    P_(homeCat, 'M6.2 -6 q0.8 0.6 1.6 0 M-9 0 Q-11 -4 -7 -5.6 Q-4 -6 -4 -3', SP * 0.45);
+    const zzz = el('text', { x: 10, y: -12, 'font-size': 4, 'font-style': 'italic', 'font-family': 'Georgia, serif', fill: 'currentColor', opacity: 0 }, homeCat);
+    zzz.textContent = 'z';
     // fish block and knife stay on the board
     const block = C_(props, '', rgb(COL.salmon), SP * 0.6);
     const blockLines = el('path', { fill: 'none', stroke: '#fff3e6', 'stroke-width': 0.5, 'stroke-linecap': 'round' }, props);
@@ -280,16 +316,31 @@ export function buildHome(svg) {
         { label: 'Tabağa koy', dur: 1.0, chop: 0 },
     ];
     let step = 0, anim = -1, eaten = 0, eatT = -1, made = 0, resetT = -1, futonOp = 0;
+    // prep: the fish is 0 in the icebox · 1 in your hands · 2 on the board. iceT / placeT / bagT play those moves
+    let prep = 0, iceT = -1, placeT = -1, bagT = -1, bagHung = false, bagDir = 'hang', fishFrom = [0, 0];
     const lock = { x: IX + SPOT.cook, y: 352, heading: -0.66 };
     const near = (pl, x, dx) => Math.abs(pl.x - (IX + x)) < dx && pl.y < 364;
-    const where = (pl) => near(pl, SPOT.door, 24) ? 'door' : near(pl, SPOT.cook, 20) ? 'cook' : near(pl, SPOT.table, 30) ? 'table' : near(pl, SPOT.futon, 20) ? 'futon' : null;
+    const where = (pl) => near(pl, SPOT.door, 22) ? 'door' : near(pl, SPOT.peg, 11) ? 'peg' : near(pl, SPOT.cook, 20) ? 'cook' : near(pl, SPOT.icebox, 15) ? 'icebox' : near(pl, SPOT.table, 30) ? 'table' : near(pl, SPOT.futon, 20) ? 'futon' : null;
+    const busy = () => anim >= 0 || eatT >= 0 || resetT >= 0 || iceT >= 0 || placeT >= 0 || bagT >= 0;
     const api = {
         root, actors,
         bounds: { x0: IX + 14, x1: IX + IW - 14 },
         view: { x0: IX - 14, x1: IX + IW + 14 },
         spawn: { x: IX + 44, y: 356 },
         /** The figure stands still at the board while a step plays. */
-        get lock() { return anim >= 0 ? lock : null; },
+        get lock() {
+            if (iceT >= 0)
+                return { x: IX + SPOT.icebox, y: 352, heading: -Math.PI / 2 };
+            if (placeT >= 0)
+                return lock;
+            if (bagT >= 0)
+                return { x: IX + SPOT.peg, y: 352, heading: -Math.PI / 2 };
+            return anim >= 0 ? lock : null;
+        },
+        /** a cat you invited, asleep on a cushion */
+        catHome: false,
+        get prep() { return prep; },
+        get bagHung() { return bagHung; },
         /** the story allows sleep (at night, when the day is done) */
         canSleep: false,
         get step() { return step; },
@@ -303,12 +354,18 @@ export function buildHome(svg) {
         pose: { work: 0, chop: 0, hold: 0 },
         /** The label of what can be done here, or null. */
         prompt(pl) {
-            if (anim >= 0 || eatT >= 0 || resetT >= 0)
+            if (busy())
                 return null;
             const w = where(pl);
             if (w === 'door')
-                return step === 5 ? null : 'Dışarı çık';
-            if (w === 'cook' && step < 4)
+                return step === 5 || prep === 1 ? null : 'Dışarı çık';
+            if (w === 'peg')
+                return pl.carryBundle ? 'Bohçayı as' : bagHung ? 'Bohçayı al' : null;
+            if (w === 'icebox')
+                return prep === 0 && step === 0 ? 'Dolabı aç' : null;
+            if (w === 'cook' && prep === 1)
+                return 'Balığı tezgâha koy';
+            if (w === 'cook' && step < 4 && prep === 2)
                 return step === 0 ? 'Suşi hazırla' : 'Suşiye devam et';
             if (w === 'cook' && step === 4)
                 return 'Tabağı al';
@@ -328,6 +385,21 @@ export function buildHome(svg) {
             const w = where(pl);
             if (w === 'door')
                 return 'exit';
+            if (w === 'peg') {
+                bagT = 0;
+                bagDir = pl.carryBundle ? 'hang' : 'take';
+                pl.carryBundle = false;
+                return null;
+            }
+            if (w === 'icebox') {
+                iceT = 0;
+                return null;
+            }
+            if (w === 'cook' && prep === 1) {
+                placeT = 0;
+                fishFrom = [pl.hands[0] - IX, pl.hands[1]];
+                return null;
+            }
             if (w === 'cook' && step < 4)
                 return 'cook';
             if (w === 'futon')
@@ -369,6 +441,82 @@ export function buildHome(svg) {
             tableTop.setAttribute('fill', tint(COL.wood, P));
             getaTop.setAttribute('fill', tint(COL.wood, P));
             block.setAttribute('fill', tint(COL.salmon, P, 0.35));
+            block.setAttribute('opacity', prep === 2 ? '1' : '0');
+            blockLines.setAttribute('opacity', prep === 2 ? '1' : '0');
+            hungBody.setAttribute('fill', tint(COL.red, P));
+            // the icebox: the door swings open on its hinge, the fish rises into your hands, it closes
+            if (iceT >= 0) {
+                iceT += dt;
+                const open = iceT < 0.8 ? easeOut(iceT / 0.8) : iceT < 2.0 ? 1 : 1 - easeOut((iceT - 2.0) / 0.7);
+                iceDoor.setAttribute('transform', `translate(341 0) scale(${f(1 - open * 1.5)} 1) translate(-341 0)`);
+                iceInside.setAttribute('opacity', f(open > 0.05 ? 1 : 0));
+                chill.setAttribute('d', open > 0.3 ? [0, 1, 2].map((k) => `M${348 + k * 6} 300 q${f(Math.sin(t * 2 + k) * 2)} -5 ${f(-1 + k)} -10`).join(' ') : '');
+                chill.setAttribute('opacity', f(open * 0.6));
+                if (iceT > 1.0 && prep === 0) {
+                    prep = 1;
+                    iceFish.setAttribute('opacity', '0');
+                }
+                if (iceT > 2.7) {
+                    iceT = -1;
+                    iceDoor.setAttribute('transform', '');
+                    iceInside.setAttribute('opacity', '0');
+                    chill.setAttribute('d', '');
+                }
+            }
+            // carrying the fish, then laying it on the board
+            let fishAt = [pl.hands[0] - IX, pl.hands[1] + 1];
+            if (iceT >= 0 && iceT < 1.4) {
+                const u = easeOut(clamp((iceT - 0.8) / 0.6, 0, 1));
+                fishAt = [lerp(351, fishAt[0], u), lerp(295, fishAt[1], u)];
+            }
+            if (placeT >= 0) {
+                placeT += dt;
+                const u = easeOut(clamp(placeT / 0.9, 0, 1));
+                fishAt = [lerp(fishFrom[0], (BLOCK.x1 * 2 - BLOCK.w0) / 2, u), lerp(fishFrom[1], BLOCK.y1 - 3, u) - Math.sin(Math.PI * u) * 6];
+                if (placeT > 1.0) {
+                    placeT = -1;
+                    prep = 2;
+                }
+            }
+            carryFish.setAttribute('opacity', (prep === 1 || placeT >= 0) && !(iceT >= 0 && iceT < 0.8) ? '1' : '0');
+            carryFish.setAttribute('transform', `translate(${f(fishAt[0])} ${f(fishAt[1])})`);
+            if (prep === 1) {
+                const behind = Math.sin(pl.heading) < -0.3;
+                const want = behind ? props : top;
+                if (carryFish.parentNode !== want)
+                    want.appendChild(carryFish);
+            }
+            // the bundle: off your back onto the peg, or back again
+            if (bagT >= 0) {
+                bagT += dt;
+                const u = ease(clamp(bagT / 1.0, 0, 1));
+                const back = [pl.x - IX - Math.cos(pl.heading) * 4, pl.y - 30], peg = [SPOT.peg, 296];
+                const a = bagDir === 'hang' ? back : peg, b = bagDir === 'hang' ? peg : back;
+                bagHung = false;
+                hung.setAttribute('opacity', '1');
+                hung.setAttribute('transform', `translate(${f(lerp(a[0], b[0], u))} ${f(lerp(a[1], b[1], u) - Math.sin(Math.PI * u) * 5)}) rotate(${f(Math.sin(u * Math.PI) * 12)})`);
+                if (bagT > 1.0) {
+                    bagT = -1;
+                    if (bagDir === 'hang')
+                        bagHung = true;
+                    else {
+                        pl.carryBundle = true;
+                        hung.setAttribute('opacity', '0');
+                    }
+                }
+            }
+            else if (bagHung) {
+                hung.setAttribute('opacity', '1');
+                hung.setAttribute('transform', `translate(${SPOT.peg} 296) rotate(${f(Math.sin(t * 0.8) * 1.5)})`);
+            }
+            // the cat, curled up, breathing
+            homeCat.setAttribute('opacity', api.catHome ? '1' : '0');
+            if (api.catHome) {
+                const br = 1 + Math.sin(t * 1.6) * 0.03;
+                homeCat.setAttribute('transform', `translate(158 351) scale(1 ${f(br)})`);
+                catBody.setAttribute('fill', rgb(P.paper));
+                zzz.setAttribute('opacity', f(0.5 + 0.5 * Math.sin(t * 0.8)));
+            }
             grd.setAttribute('fill', rgb(P.paper));
             steam.setAttribute('d', [0, 1].map((k) => { const x = 320 + k * 6, y0 = 306; const s = Math.sin(t * 1.6 + k * 2); return `M${x} ${y0} q${f(2 + s)} -4 0 -8 q${f(-2 - s)} -4 0 -8`; }).join(' '));
             steam.setAttribute('opacity', f(0.35 + 0.15 * Math.sin(t * 0.9)));
@@ -461,14 +609,16 @@ export function buildHome(svg) {
                     resetT = -1;
                     step = 0;
                     eaten = 0;
+                    prep = 0;
+                    iceFish.setAttribute('opacity', '1');
                     pieces.forEach((pc) => { pc.eaten = 0; });
                     props.appendChild(dish);
                 }
             }
             // the figure's arms
-            api.pose.work = anim >= 0 ? 1 : 0;
+            api.pose.work = anim >= 0 || (iceT >= 0 && iceT < 1.0) || bagT >= 0 || placeT >= 0 ? 1 : 0;
             api.pose.chop = step === 1 && anim >= 0 ? 1 : 0;
-            api.pose.hold = step === 5 ? 1 : 0;
+            api.pose.hold = step === 5 || (prep === 1 && placeT < 0 && !(iceT >= 0 && iceT < 1.0)) ? 1 : 0;
             // words that drift up and fade
             if (floatT < 2.2) {
                 floatT += dt;
