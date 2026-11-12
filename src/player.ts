@@ -88,9 +88,9 @@ export function createPlayer(parent: Element, x: number, y: number) {
   const weave = el('path', { fill: 'none', stroke: 'currentColor', 'stroke-width': PEN * 0.4, 'stroke-linecap': 'round' }, headG);
 
   // an unhurried walk, and at most a light jog — nobody is late for anything here
-  const walk = gait({ kind: 'walk', period: 1.22, stride: 22 });
-  const run = gait({ kind: 'run', thigh: 23, shin: 23, stride: 24, lift: 9, period: 0.84, heelKick: 3.5, ankleY: 118.4, toe: 4.2, heelOff: 12 });
-  const JOG = 0.5;
+  const walk = gait({ kind: 'walk', period: 1.06, stride: 24 });
+  const run = gait({ kind: 'run', thigh: 23, shin: 23, stride: 26, lift: 10, period: 0.76, heelKick: 4, ankleY: 118.4, toe: 4.2, heelOff: 12 });
+  const JOG = 0.6;
   const armS = [spring(70, 10), spring(70, 10)];
   const bend = spring(40, 9);
   const sway = spring(26, 3.2), hatS = spring(30, 4.5);

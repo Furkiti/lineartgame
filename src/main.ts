@@ -10,6 +10,7 @@ import { createKimono, createCyclist, createKid, createBoat } from './village/pe
 import { createCat, createSparrows, createSwallows, createPetals, createSmoke } from './village/critters.ts';
 import { createPlayer, Y_MIN } from './player.ts';
 import { buildHome } from './village/home.ts';
+import { buildFair } from './village/fair.ts';
 import { createCranes } from './cranes.ts';
 import { createJoystick } from './joystick.ts';
 import { createUI } from './story/ui.ts';
@@ -72,6 +73,7 @@ const toSvg = (e) => { const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.
 const sky = createSky(svg, skyL, defs, {
   onScrub: (v) => { scrub = v; if (v !== null) tau = v; },
   onShoot: () => palette(tau).night > 0.4,
+  draggable: !STORY, // in the story, time is not yours to push
 });
 const street = buildStreet({ back, houses, front, glow }, defs);
 const canal = buildCanal({ ground, canalL, willowL, glow }, defs);
@@ -127,7 +129,7 @@ const stick = createJoystick(card, $('#stick'), $('#knob'));
 const home = buildHome(svg);
 const DOOR = { x: 826, w: 24 };
 const STREET = { bounds: { x0: 14, x1: 946 }, view: { x0: 0, x1: W } };
-let inside = false, fade = 0, fadeTo = 0, pending: (() => void) | null = null, hintUntil = -1, tNow = 0, tipUntil = -1;
+let inside = false, inFair = false, fade = 0, fadeTo = 0, pending: (() => void) | null = null, hintUntil = -1, tNow = 0, tipUntil = -1;
 const fadeN = $('#fade'), actN = $<HTMLButtonElement>('#act');
 const go = (fn: () => void) => { if (!pending) { pending = fn; fadeTo = 1; } };
 function enter() {
@@ -147,10 +149,40 @@ function exit() {
   player.x = DOOR.x; player.y = Y_MIN + 3; player.setHeading(Math.PI / 2);
   player.bounds = STREET.bounds; camSnap = true;
 }
-const atDoor = () => !inside && Math.abs(player.x - DOOR.x) < DOOR.w && player.y < 362;
+const atDoor = () => !inside && !inFair && Math.abs(player.x - DOOR.x) < DOOR.w && player.y < 362;
+
+// ------------------------------------------------------------------ the summer fair, past the west end of the street
+const fair = buildFair(svg, { glow: 'url(#v-warmglow)' });
+svg.insertBefore(fair.root, home.root);
+// a signpost and two lanterns at the street's west end point the way
+const sign = layer(front);
+sign.innerHTML = `<path d="M24 352 L24 296 M30 352 L30 296" fill="none" stroke="currentColor" stroke-width="1.1"/>
+  <path d="M14 300 L44 300 L48 307 L44 314 L14 314Z" fill="#e8d2a6" stroke="currentColor" stroke-width="0.7"/>
+  <text x="29" y="307.4" font-size="9" font-weight="800" text-anchor="middle" dominant-baseline="central" fill="#c8423a" font-family='"Hiragino Mincho ProN","Yu Mincho",serif'>祭</text>
+  <path d="M20 307 l-4 0 m2 -2 l-2 2 l2 2" fill="none" stroke="currentColor" stroke-width="0.6"/>`;
+let fairSeen = false;
+function enterFair() {
+  inFair = true;
+  [skyL, scene, glow, strokeL].forEach((n) => (n.style.display = 'none'));
+  fair.root.style.display = '';
+  fair.actors.appendChild(player.g);
+  player.x = fair.spawn.x; player.y = fair.spawn.y; player.setHeading(0);
+  player.bounds = fair.bounds; camSnap = true;
+  if (!fairSeen && STORY) { fairSeen = true; story?.onFair(); }
+}
+function exitFair() {
+  inFair = false;
+  [skyL, scene, glow, strokeL].forEach((n) => (n.style.display = ''));
+  fair.root.style.display = 'none';
+  walkers.appendChild(player.g);
+  player.x = 40; player.y = 362; player.setHeading(0);
+  player.bounds = STREET.bounds; camSnap = true;
+}
+const atFairGate = () => !inside && player.x < 44;
 function act() {
   if (pending || winN.classList.contains('show')) return;
   if (story?.act()) return;
+  if (!inside && atFairGate()) { go(inFair ? exitFair : enterFair); return; }
   if (!inside) { if (atDoor()) go(enter); return; }
   const r = home.act(player);
   if (r === 'exit') go(exit);
@@ -209,11 +241,23 @@ const story = STORY && ui ? createStory({
     setTau: (v) => { tau = v; },
     fade: (v) => { fadeTo = v; },
     isFaded: () => fade >= 1,
+    isOpened: () => opened,
     tip: (text, sticky = false) => { if (text) { hintN.textContent = text; hintN.classList.remove('gone'); tipUntil = sticky ? Infinity : tNow + 4.5; } else { hintN.classList.add('gone'); tipUntil = -1; } },
     banner: (a, b) => { bannerN.innerHTML = `<b>${a}</b><span>${b}</span>`; bannerN.classList.remove('show'); void bannerN.offsetWidth; bannerN.classList.add('show'); },
   },
 }) : null;
 card.addEventListener('pointerdown', (e) => story?.touch(e), true);
+
+// ------------------------------------------------------------------ opening: two shoji doors slide apart
+const openingN = $('#opening');
+let opened = !STORY || (q.has('debug') && !q.has('opening'));
+if (opened) openingN.remove();
+else openingN.addEventListener('click', () => {
+  if (opened) return;
+  opened = true; openingN.classList.add('open');
+  story?.opened();
+  setTimeout(() => openingN.remove(), 2400);
+});
 
 const near = (a: number, b: number, dx: number, ay: number, by: number, dy: number) => Math.abs(a - b) < dx && Math.abs(ay - by) < dy;
 let cdCat = 0, cdBirds = 0, cdTree = 0;
@@ -247,19 +291,20 @@ run((t, dt) => {
   if (!STORY && stick.touched && t > hintUntil) hintN.classList.add('gone');
   if (STORY && tipUntil > 0 && t > tipUntil) { hintN.classList.add('gone'); tipUntil = -1; }
   if (inside) home.draw(t, dt, P, player);
+  if (inFair) fair.draw(t, dt, P, wind, player);
 
   // fade through the paper when going in or out
   fade = clamp(fade + (fadeTo ? dt : -dt) * 3.4, 0, 1);
   if (fade >= 1 && pending) { pending(); pending = null; fadeTo = 0; }
   fadeN.style.opacity = f(fade);
-  story?.update({ t, dt, P, wind, tau, inside, base: { w: vb.w, h: vb.h }, stickActive: stick.active, stickTouched: stick.touched });
+  story?.update({ t, dt, P, wind, tau, inside, fair: inFair, base: { w: vb.w, h: vb.h }, stickActive: stick.active, stickTouched: stick.touched });
   const sp = story ? story.prompt() : null;
-  const label = pending || sp === '' ? null : sp ?? (inside ? home.prompt(player) : atDoor() && !winN.classList.contains('show') ? 'İçeri gir' : null);
+  const label = pending || sp === '' ? null : sp ?? (inside ? home.prompt(player) : atFairGate() ? (inFair ? 'Sokağa dön' : 'Panayıra git') : atDoor() && !winN.classList.contains('show') ? 'İçeri gir' : null);
   if (label && actN.textContent !== label) actN.textContent = label;
   actN.classList.toggle('show', !!label);
 
   // camera: eases after you and leads a little where you face, or glides to what the story frames
-  const view = inside ? home.view : STREET.view;
+  const view = inside ? home.view : inFair ? fair.view : STREET.view;
   // inside, the room is framed a little closer than the street
   let follow: { cx: number; cy: number; z: number };
   if (OLD_CAM) follow = inside && STORY ? { cx: player.x + player.face * vb.w * 0.05, cy: 324, z: Math.min(1.5, vb.h / 200) } : { cx: player.x + player.face * vb.w * 0.08, cy: H - vb.h / 2, z: 1 };
@@ -372,7 +417,7 @@ run((t, dt) => {
   timeN.textContent = fmt(elapsed);
 
   // depth: whoever is nearer the canal is drawn in front
-  const all = [...people, ...(inside ? [] : [player]), ...(story ? story.sortables() : []), ...cranes.list.map((c) => ({ g: c.g, y: c.y + 0.5 }))];
+  const all = [...people, ...(inside || inFair ? [] : [player]), ...(story ? story.sortables() : []), ...cranes.list.map((c) => ({ g: c.g, y: c.y + 0.5 }))];
   all.sort((a, b) => a.y - b.y);
   let prev: Element | null = null;
   for (const p of all) { if (p.g.previousElementSibling !== prev) walkers.insertBefore(p.g, prev ? prev.nextSibling : walkers.firstChild); prev = p.g; }
@@ -381,4 +426,4 @@ run((t, dt) => {
   clock.innerHTML = `<b>${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}</b> <span>${period(hrs)}</span>`;
 });
 
-(window as unknown as { __game: unknown }).__game = { player, cranes, people, home, act, enter, exit, story, ui, get tau() { return tau; }, setTau: (v) => { tau = v; }, get score() { return score; }, get inside() { return inside; } };
+(window as unknown as { __game: unknown }).__game = { player, cranes, people, home, act, enter, exit, story, ui, get tau() { return tau; }, setTau: (v) => { tau = v; }, get score() { return score; }, get inside() { return inside; }, get inFair() { return inFair; }, enterFair, exitFair };
