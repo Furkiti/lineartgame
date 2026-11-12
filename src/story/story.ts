@@ -15,6 +15,7 @@ import { type UI } from './ui.ts';
 import { createKenta, createStuckKite, createKite, createStroke, recognise, type Kenta } from './kenta.ts';
 import { createFox } from './fox.ts';
 import { createCloseup } from './closeup.ts';
+import { createShodo, CHA, brush, compare } from './shodo.ts';
 import { createNotebook, SKETCH, type Entry } from './notebook.ts';
 import { sfx, haptic, wakeAudio, inkRing, approach, clamp01, easeOut, backOut } from './fx.ts';
 
@@ -100,6 +101,50 @@ export function createStory(o: {
   const lanternGlow = el('circle', { cx: L.x, cy: L.cy, r: 34, fill: 'url(#v-warmglow)', opacity: 0 }, layers.glow);
   const lanternLines: Vec[][] = [];
 
+  // the workshop (a plaque by the door) and the tea house's blank sign, waiting for a hand
+  const ATELIER_X = 346;
+  const atelier = el('g', {}, layers.front);
+  atelier.innerHTML = `<path d="M${ATELIER_X} 282 L${ATELIER_X} 288" stroke="currentColor" stroke-width="0.5"/>
+    <path d="M${ATELIER_X - 7} 288 L${ATELIER_X + 7} 288 L${ATELIER_X + 7} 310 L${ATELIER_X - 7} 310Z" fill="#e8d2a6" stroke="currentColor" stroke-width="0.7"/>
+    <text x="${ATELIER_X}" y="299.4" font-size="10" font-weight="800" text-anchor="middle" dominant-baseline="central" fill="currentColor" font-family='"Hiragino Mincho ProN","Yu Mincho",serif'>墨</text>
+    <path d="M${ATELIER_X - 3} 307 l3 -1.6 l3 1.6" stroke="#c8423a" stroke-width="0.8" fill="none"/>`;
+  const SIGN = { x: 594, y: 242, w: 26 };
+  const teaSign = el('g', {}, layers.front);
+  el('path', { d: `M${SIGN.x - 9} ${SIGN.y - 16} L${SIGN.x - 9} ${SIGN.y - 13} M${SIGN.x + 9} ${SIGN.y - 16} L${SIGN.x + 9} ${SIGN.y - 13}`, stroke: 'currentColor', 'stroke-width': 0.5, fill: 'none' }, teaSign);
+  el('path', { d: `M${SIGN.x - 13} ${SIGN.y - 13} L${SIGN.x + 13} ${SIGN.y - 13} L${SIGN.x + 13} ${SIGN.y + 13} L${SIGN.x - 13} ${SIGN.y + 13}Z`, fill: '#e8d2a6', stroke: 'currentColor', 'stroke-width': 0.8 }, teaSign);
+  const signWait = el('path', { d: `M${SIGN.x - 9} ${SIGN.y - 9} L${SIGN.x + 9} ${SIGN.y - 9} L${SIGN.x + 9} ${SIGN.y + 9} L${SIGN.x - 9} ${SIGN.y + 9}Z`, fill: 'none', stroke: 'currentColor', 'stroke-width': 0.5, 'stroke-dasharray': '1.6 1.4', opacity: 0.6 }, teaSign);
+  const signInk = el('g', { transform: `translate(${SIGN.x - 9.5} ${SIGN.y - 9.5}) scale(0.19)` }, teaSign);
+  const shodo = createShodo(card, {
+    onDone: (strokes, score) => {
+      signInk.innerHTML = strokes.map((d) => `<path d="${d}" fill="currentColor"/>`).join('');
+      signWait.setAttribute('opacity', '0');
+      run(orderDelivered(score));
+    },
+    onExit: () => { if (mode === 'desk') { mode = 'walk'; cam = null; } },
+  });
+
+  // guided toys for the cat: pick one, then go over its outline (your hand stays in it)
+  const TOYS: { name: string; c: string; pts: Vec[]; deco: string }[] = [
+    { name: 'Top', c: '#c8423a', pts: Array.from({ length: 25 }, (_, i) => [Math.sin(i / 24 * 6.283) * 7, -Math.cos(i / 24 * 6.283) * 7] as Vec), deco: 'M-7 0 Q0 -3 7 0 M-4.6 -5 Q0 -7 4.6 -5' },
+    { name: 'Balık', c: '#e8743a', pts: [[-9, 0], [-5, -4.6], [2, -4.4], [6, -1.4], [10, -5], [10, 5], [6, 1.4], [2, 4.4], [-5, 4.6], [-9, 0]], deco: 'M-5.6 -1 l0.1 0 M2 -4 Q0.6 0 2 4 M-1 -3 l0 1 M-1 2 l0 1' },
+    { name: 'Fare', c: '#bdb6a8', pts: [[-9, 2], [-6, -3], [0, -5.6], [6, -3.6], [8, 1], [6, 4], [-6, 4], [-9, 2]], deco: 'M-5.6 -0.6 l0.1 0 M-1 -5 a2.4 2.4 0 1 1 -0.1 0 M8 1 Q14 0 13 -5 Q12 -8 15 -9' },
+  ];
+  const TOY_AT: Vec = [530, 312];
+  const toyTmpl = el('path', { fill: 'none', stroke: '#c8423a', 'stroke-width': 0.7, 'stroke-dasharray': '1.6 1.4', opacity: 0 }, layers.stroke);
+  const tmplWorld = (k: number) => TOYS[k].pts.map((p) => [TOY_AT[0] + p[0], TOY_AT[1] + p[1]] as Vec);
+  /** a closed outline drawn from anywhere, either way round: find the best match */
+  function matchLoop(user: Vec[], tmpl: Vec[]) {
+    let best = { err: 1e9, blend: [] as Vec[] };
+    for (const seq of [user, [...user].reverse()]) {
+      for (let k = 0; k < seq.length; k += Math.max(1, Math.floor(seq.length / 16))) {
+        const rot = [...seq.slice(k), ...seq.slice(0, k)];
+        const r = compare(rot, tmpl, 0.4);
+        if (r.err < best.err) best = r;
+      }
+    }
+    return best;
+  }
+
   // the toy you draw for the cat
   const toyG = el('g', {}, layers.front);
   const toy = { on: false, p: [0, 0] as Vec, v: [0, 0] as Vec, rot: 0, w: 0, t: 0, ground: 352, line: [] as Vec[] };
@@ -108,11 +153,12 @@ export function createStory(o: {
   const notebook = createNotebook(card);
   const q = {
     kite: 'sad' as 'sad' | 'talked' | 'done', dinner: '' as '' | 'kenta' | 'alone', sushi: false, fox: false,
-    lantern: false, toy: false, catHome: false, letter: false, fair: false, fresh: new Set<string>(), day: 1, slept: 0,
+    lantern: false, toy: false, toyKind: 0, catHome: false, letter: false, fair: false, order: false, fresh: new Set<string>(), day: 1, slept: 0,
   };
   let kiteLine: Vec[] = [];
   const entries = (): Entry[] => [
     { id: 'kite', title: 'Kenta’nın uçurtması', hint: 'Kiraz ağacının altında biri üzgün.', sketch: kiteLine.length ? sketchOf([[...kiteLine, kiteLine[0]]]) : SKETCH.kite, done: q.kite === 'done', fresh: q.fresh.has('kite') },
+    { id: 'order', title: 'İlk sipariş', hint: 'Atölyemde bir sipariş fişi var.', sketch: CHA.map((c) => 'M' + c.pts.map((p) => pt([8 + p[0] * 0.44, 8 + p[1] * 0.44])).join('L')).join(' '), done: q.order, fresh: q.fresh.has('order') },
     { id: 'lantern', title: 'Kapımın feneri', hint: 'Kapının yanındaki fener bomboş.', sketch: q.lantern ? sketchOf(lanternLines) : SKETCH.lantern, done: q.lantern, fresh: q.fresh.has('lantern') },
     { id: 'toy', title: q.catHome ? 'Eve gelen kedi' : 'Kedinin oyuncağı', hint: 'Bankta bir kedi uyukluyor.', sketch: q.toy ? sketchOf([toy.line]) : SKETCH.cat, done: q.toy, fresh: q.fresh.has('toy') },
     { id: 'fair', title: 'Yaz panayırı', hint: q.letter ? 'Sokağın batı ucunda, akşam.' : 'Posta kutusunda bir şey var.', sketch: SKETCH.fair, done: q.fair, fresh: q.fresh.has('fair') },
@@ -121,10 +167,10 @@ export function createStory(o: {
   ];
   const defterBtn = document.createElement('button');
   defterBtn.type = 'button'; defterBtn.className = 'defter-btn'; defterBtn.setAttribute('aria-label', 'Defter');
-  defterBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M5 3h11a3 3 0 0 1 3 3v15H8a3 3 0 0 1-3-3Z M8 3v18 M11 8h5 M11 11h5"/></svg><span class="dots">${'<i></i>'.repeat(6)}</span>`;
+  defterBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M5 3h11a3 3 0 0 1 3 3v15H8a3 3 0 0 1-3-3Z M8 3v18 M11 8h5 M11 11h5"/></svg><span class="dots">${'<i></i>'.repeat(7)}</span>`;
   card.appendChild(defterBtn);
   const dots = [...defterBtn.querySelectorAll('.dots i')] as HTMLElement[];
-  const refreshDots = () => { [q.kite === 'done', q.lantern, q.toy, q.fair, q.sushi, q.fox].forEach((d, i) => dots[i].classList.toggle('on', d)); };
+  const refreshDots = () => { [q.kite === 'done', q.order, q.lantern, q.toy, q.fair, q.sushi, q.fox].forEach((d, i) => dots[i].classList.toggle('on', d)); };
   defterBtn.addEventListener('click', () => {
     sfx.tap();
     notebook.show({ dayN: q.day, subtitle: 'bugün', entries: entries(), sentence: daySentence(false), button: 'Kapat' });
@@ -136,6 +182,7 @@ export function createStory(o: {
   function daySentence(end: boolean) {
     const s: string[] = [];
     if (q.kite === 'done') s.push('Kenta’ya bir uçurtma çizdim');
+    if (q.order) s.push('çay evinin tabelasını yazdım');
     if (q.lantern) s.push('kapımın fenerine resim yaptım');
     if (q.toy) s.push(q.catHome ? 'bir kedi eve geldi' : 'bankta bir kediyle oynadık');
     if (q.fair) s.push('panayırın fenerleri altında dolaştım');
@@ -189,7 +236,7 @@ export function createStory(o: {
   });
 
   // ------------------------------------------------------------------ state & a tiny script runner
-  let mode: 'walk' | 'cine' | 'brush' | 'cook' | 'sleep' = 'walk';
+  let mode: 'walk' | 'cine' | 'brush' | 'cook' | 'sleep' | 'desk' = 'walk';
   let cam: Cam = null;
   let script: Scene | null = null, waitT = 0, waitFn: (() => boolean) | null = null;
   let ctx: Ctx;
@@ -297,8 +344,10 @@ export function createStory(o: {
       ui.showGesture('path', () => [[L.x - 4, L.cy - 6], [L.x + 3, L.cy - 2], [L.x - 3, L.cy + 3], [L.x + 4, L.cy + 7]], { period: 2.6 });
     } else {
       cam = fit(500, 262, 600, 362, 3);
-      env.tip('Kediye bir oyuncak çiz: top, balık, ne istersen.', true);
-      ui.showGesture('path', () => Array.from({ length: 13 }, (_, i) => [CAT[0] - 24 + Math.cos(i / 12 * 6.283) * 6, CAT[1] - 18 + Math.sin(i / 12 * 6.283) * 6] as Vec), { period: 2.6 });
+      const tm = tmplWorld(q.toyKind);
+      toyTmpl.setAttribute('d', 'M' + tm.map(pt).join('L')); toyTmpl.setAttribute('opacity', '0.9');
+      env.tip(`Kesik çizginin üstünden geç: bir ${TOYS[q.toyKind].name.toLowerCase()}.`, true);
+      ui.showGesture('path', () => tm, { period: 2.8 });
     }
   }
   function endBrush() {
@@ -324,7 +373,10 @@ export function createStory(o: {
     }
     if (purpose === 'toy') {
       if (r.size < 5) { stroke.vanish(); return; }
-      run(toyBorn(pts.slice(), r.size)); return;
+      const m = matchLoop(pts, tmplWorld(q.toyKind));
+      if (m.err > 6) { stroke.vanish(); sfx.nope(); env.tip('Kesik çizgiye biraz daha yakın çiz.'); ui.showGesture('path', () => tmplWorld(q.toyKind), { period: 2.8 }); return; }
+      toyTmpl.setAttribute('opacity', '0');
+      run(toyBorn(m.blend, r.size)); return;
     }
     // the kite: any closed shape flies, exactly as drawn
     if (r.kind === 'tiny') { stroke.vanish(); return; }
@@ -369,6 +421,46 @@ export function createStory(o: {
     env.tip('Turna seni evine götürüyor.');
   }
 
+  function* toyPick(): Scene {
+    if (!player.carryBundle) { think('Fırçam bohçada… bohçam evde, askıda.', 3); sfx.nope(); return; }
+    mode = 'cine';
+    cam = fit(500, 262, 600, 362, 3);
+    yield 0.8;
+    ui.say(catHead, 'Miyav?', 60);
+    think('Ona ne çizsem?', 60);
+    const k = yield* choose(TOYS.map((t) => t.name));
+    ui.say(catHead, '…', 0.4); ui.say(playerHead, '…', 0.3);
+    q.toyKind = k;
+    yield 0.4;
+    mode = 'walk';
+    startBrush('toy');
+  }
+
+  function* workshop(): Scene {
+    mode = 'desk'; obj = null; ui.guide(null);
+    player.faceTo = -Math.PI / 2;
+    cam = fit(ATELIER_X - 40, 270, ATELIER_X + 40, 330, 4);
+    yield 0.9;
+    shodo.open();
+    player.faceTo = null;
+  }
+
+  function* orderDelivered(score: number): Scene {
+    mode = 'cine';
+    cam = fit(SIGN.x - 46, SIGN.y - 30, SIGN.x + 46, SIGN.y + 60, 4);
+    yield 1.4;
+    ui.sparkle(() => [SIGN.x, SIGN.y]); sfx.chime();
+    yield 1.4;
+    const owner = (): Vec => [SIGN.x + 30, 300];
+    ui.say(owner, score > 0.62 ? 'Bu tabelaya bakan içeri girmeden duramaz!' : 'Ne güzel bir el yazısı! Teşekkürler!', 3.6);
+    yield 3.8;
+    ui.sparkle(null);
+    q.order = true; mark('order'); sfx.success();
+    think('İlk siparişim. Sokakta artık benim yazım var.', 3.2);
+    yield 3;
+    mode = 'walk'; cam = null;
+  }
+
   function* lanternDone(): Scene {
     mode = 'cine';
     q.lantern = true; mark('lantern'); sfx.chime(); haptic(12);
@@ -384,13 +476,15 @@ export function createStory(o: {
   function* toyBorn(pts: Vec[], size: number): Scene {
     mode = 'cine'; pad.classList.remove('show'); env.tip(null); ui.hideGesture();
     // the shape you drew, as you drew it, becomes a toy that drops onto the bench
-    const n = stroke.copy(toyG); n.setAttribute('fill', 'currentColor');
-    const closed = Math.hypot(pts[0][0] - pts[pts.length - 1][0], pts[0][1] - pts[pts.length - 1][1]) < Math.max(8, size * 0.45);
-    if (closed) el('path', { d: 'M' + pts.map(pt).join('L') + 'Z', fill: '#c8423a', opacity: 0.85 }, toyG).parentNode!.insertBefore(toyG.lastChild!, toyG.firstChild);
-    stroke.clear();
+    // your line, eased onto the outline, filled in the toy's colour, with its little details
+    const T = TOYS[q.toyKind];
     const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length, cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
+    toyG.innerHTML = '';
+    el('path', { d: 'M' + pts.map((p) => pt([p[0] - cx, p[1] - cy])).join('L') + 'Z', fill: T.c, opacity: 0.9 }, toyG);
+    el('path', { d: brush([...pts, pts[0]].map((p) => [p[0] - cx, p[1] - cy] as Vec), 0.9), fill: 'currentColor' }, toyG);
+    el('path', { d: T.deco, fill: 'none', stroke: 'currentColor', 'stroke-width': 0.6, 'stroke-linecap': 'round', transform: `translate(${f(TOY_AT[0] - cx)} ${f(TOY_AT[1] - cy)})` }, toyG);
+    stroke.clear();
     toyG.setAttribute('transform', '');
-    [...toyG.children].forEach((c) => c.setAttribute('transform', `translate(${f(-cx)} ${f(-cy)})`));
     toy.on = true; toy.p = [cx, cy]; toy.v = [0, 0]; toy.rot = 0; toy.w = 0; toy.t = 0; toy.line = pts;
     toy.ground = (cx > BENCH.x0 && cx < BENCH.x1 ? BENCH.y : 352) - Math.min(8, size * 0.3);
     sfx.chime();
@@ -556,7 +650,8 @@ export function createStory(o: {
     if (!q.letter && Math.abs(player.x - MAIL_X) < 13) return { label: 'Mektubu al', go: () => run(readLetter()) };
     if (q.kite !== 'done' && nearKenta()) return q.kite === 'sad' ? { label: 'Kenta ile konuş', go: () => run(talk()) } : { label: 'Fırçayı çıkar', go: () => startBrush('kite') };
     if (q.kite === 'done' && !q.lantern && nearLantern()) return { label: 'Fenere bir şey çiz', go: () => startBrush('lantern') };
-    if (q.kite === 'done' && !q.toy && nearCat()) return { label: 'Kediye oyuncak çiz', go: () => startBrush('toy') };
+    if (q.kite === 'done' && !q.toy && nearCat()) return { label: 'Kediye oyuncak çiz', go: () => run(toyPick()) };
+    if (q.kite === 'done' && !q.order && Math.abs(player.x - ATELIER_X) < 20) return { label: 'Atölyeye gir', go: () => run(workshop()) };
     return null;
   }
 
@@ -642,6 +737,7 @@ export function createStory(o: {
         if (!c.inside && !q.sushi && home.step === 0 && guest.walking) { guest.g.remove(); guest = null; script = null; mode = 'walk'; cam = null; q.sushi = true; mark('sushi'); toLamp(); }
       }
       closeup.draw(t, dt, P);
+      shodo.draw(t, dt);
 
       // dinner: with Kenta if you said yes; a quiet one if not
       if (q.kite === 'done' && !q.sushi && c.inside && home.step === 6 && q.dinner === 'kenta' && !guest && !script) run(guestArrives());
@@ -714,7 +810,7 @@ export function createStory(o: {
     /** called on any touch: a ring and a sound, everywhere */
     touch(e: PointerEvent) { wakeAudio(); inkRing(card, e.clientX, e.clientY); },
     // debug hooks for headless checks
-    _dbg: { q, kenta, fox, closeup, run, startBrush, get mode() { return mode; }, get picked() { return picked; } },
+    _dbg: { q, kenta, fox, closeup, shodo, run, startBrush, get mode() { return mode; }, get picked() { return picked; } },
   };
 }
 export type Story = ReturnType<typeof createStory>;
