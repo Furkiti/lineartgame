@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { readSave, writeSave, SAVE_KEY, type SavedGame } from '../src/story/save.ts';
+import { readSave, writeSave, resetSave, SAVE_KEY, type SavedGame } from '../src/story/save.ts';
 
 test('damaged or obsolete saves fall back to a new game without throwing', () => {
   let value: string | null = null;
@@ -10,4 +10,17 @@ test('damaged or obsolete saves fall back to a new game without throwing', () =>
   assert.equal(writeSave(save), true); assert.deepEqual(readSave(), save); assert.equal(SAVE_KEY, 'ink-street-v2');
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: { getItem() { throw Error('Unavailable'); }, setItem() { throw Error('Quota'); } } });
   assert.equal(readSave(), null); assert.equal(writeSave(save), false);
+});
+
+test('reset prevents unload autosave from recreating the deleted journey', () => {
+  let value: string | null = '{"version":2}';
+  Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
+    getItem: () => value,
+    setItem: (_: string, next: string) => { value = next; },
+    removeItem: () => { value = null; },
+  } });
+  assert.equal(resetSave(), true);
+  assert.equal(value, null);
+  assert.equal(writeSave({ version: 2, story: { day: 3 }, art: {}, home: {}, world: { x: 450, y: 350, inside: false, fair: false, tau: .8 } }), false);
+  assert.equal(value, null);
 });

@@ -19,7 +19,7 @@ import { createShodo, CHA, brush, compare } from './shodo.ts';
 import { createNotebook, SKETCH, type Entry } from './notebook.ts';
 import { createPaper, fitLine, linePath } from './paper.ts';
 import { nextVisit, timeRate, type Visit } from './schedule.ts';
-import { type SavedGame, SAVE_KEY } from './save.ts';
+import { type SavedGame } from './save.ts';
 import { sfx, haptic, wakeAudio, inkRing, approach, clamp01, easeOut, backOut } from './fx.ts';
 
 type Home = {
@@ -732,14 +732,6 @@ export function createStory(o: {
   });
   const pocket = document.createElement('button'); pocket.type = 'button'; pocket.className = 'street-pocket'; pocket.setAttribute('aria-label', 'Cep ve küçük dükkân'); card.appendChild(pocket);
   pocket.addEventListener('click', () => { if (mode === 'walk' && !script && !notebook.isOpen) run(shop()); });
-  const settings = document.createElement('button'); settings.type = 'button'; settings.className = 'street-settings'; settings.textContent = 'Yeni sayfa'; card.appendChild(settings);
-  settings.addEventListener('click', () => { if (mode === 'walk' && !script && !notebook.isOpen) run(restart()); });
-  function* restart(): Scene {
-    mode = 'cine'; think('Bu mahalledeki çizgilerini silip baştan başlamak ister misin?', 60);
-    const a = yield* choose(['Burada kalayım', 'Yeni bir başlangıç']);
-    if (a === 1) { localStorage.removeItem(SAVE_KEY); location.reload(); }
-    mode = 'walk';
-  }
   function* missedNote(): Scene {
     mode = 'cine'; q.missedNote = true;
     letterN.querySelector('.paper')!.innerHTML = `<p class="to">Kapını çaldım, seni bulamadım.</p><p>Uçurtma hâlâ çok güzel uçuyor. Başka akşam birlikte yeriz.</p><p class="from">— Kenta</p><button type="button">Cebime koy</button>`;

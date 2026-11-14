@@ -55,7 +55,7 @@ Deneme sürümü: https://furkiti.github.io/lineartgame/playtest/
 - Davet edilen Kenta akşam gelir, kapıda bekler; çok geç kalırsan not bırakır. Başka akşam yeniden davet edilebilir. Erken hazırlanan sofra Kenta gelene kadar kalır.
 - İkinci gün kaligrafi siparişi, kalıcı tabela, dört sikke ve seçilebilir minder/su kabı açılır. Cebinden iki sikkeye rüzgâr çanı alabilirsin.
 - Üçüncü gün yağmur, çay köşesi/fener masası seçimi, kendi deseninle ortak alan ve akşam buluşması açılır. Köşe ile çizimler sonraki günlerde kalır.
-- İlerleme bu tarayıcıda otomatik kaydedilir. Defter önceki günleri saklar. **Yeni sayfa** onayından sonra yerel kayıt silinerek başlangıca dönülür.
+- İlerleme bu tarayıcıda otomatik kaydedilir. Defter önceki günleri saklar. Test için **oyun saatine iki kez dokun**; sıfırlama onayından sonra yerel kayıt silinerek başlangıca dönülür.
 
 `npm test` (Node 22.6+) zaman/randevu sınırlarını ve kayıt hata durumlarını sınar. `npx tsc --noEmit` tür kontrolünü yapar.
 

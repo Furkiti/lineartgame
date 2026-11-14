@@ -1,5 +1,5 @@
 import './story/experience.css';
-import { readSave, writeSave } from './story/save.ts';
+import { readSave, writeSave, resetSave } from './story/save.ts';
 // Mürekkep Sokağı — steer a traveller through the ink village with a thumb joystick
 // and gather the paper cranes. The village (street, canal, sky, villagers, critters)
 // comes from github.com/JDhruv14/line-art-animation (MIT).
@@ -197,7 +197,7 @@ function act() {
   else if ((r === 'cook' || r === 'sleep') && story) story.onHome(r);
 }
 actN.addEventListener('click', act);
-addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key.toLowerCase() === 'e') { e.preventDefault(); act(); } });
+addEventListener('keydown', (e) => { if (e.defaultPrevented) return; if (e.key === 'Enter' || e.key.toLowerCase() === 'e') { e.preventDefault(); act(); } });
 
 // ------------------------------------------------------------------ camera: follows you, or frames what the story wants
 const VBCAM = !q.has('slide');
@@ -271,9 +271,9 @@ if (saved) {
   if (saved.world.inside) enter(); else if (saved.world.fair) enterFair();
   player.x = saved.world.x; player.y = saved.world.y; tau = saved.world.tau;
 }
-let saveAt = 0, warnedSave = false;
+let saveAt = 0, warnedSave = false, restarting = false;
 function saveGame() {
-  if (!story?.canSave || home.busy) return;
+  if (restarting || !story?.canSave || home.busy) return;
   const snapshot = story.snapshot();
   const ok = writeSave({ version: 2, ...snapshot, home: home.snapshot(), world: { x: player.x, y: player.y, inside, fair: inFair, tau } });
   if (!ok && !warnedSave) { warnedSave = true; hintN.textContent = 'Bu tarayıcı ilerlemeni kaydedemiyor.'; hintN.classList.remove('gone'); }
@@ -284,12 +284,35 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) { sav
 const near = (a: number, b: number, dx: number, ay: number, by: number, dy: number) => Math.abs(a - b) < dx && Math.abs(ay - by) < dy;
 let cdCat = 0, cdBirds = 0, cdTree = 0;
 const clock = $('#clock');
+let lastClockTap: number | null = null;
+function askToRestart() {
+  if (!STORY || !opened || restarting) return;
+  stick.reset();
+  if (!window.confirm('Oyunu sıfırlayıp baştan başlamak ister misin? Bu tarayıcıdaki ilerlemen silinecek.')) return;
+  restarting = true;
+  if (resetSave()) location.reload();
+  else { restarting = false; window.alert('Kayıt silinemedi. Tarayıcının site verisi izinlerini kontrol et.'); }
+}
+if (STORY) {
+  clock.setAttribute('role', 'button'); clock.tabIndex = 0;
+  clock.setAttribute('aria-label', 'Oyun saati');
+  // pointerup works for both touch and mouse even while the time text is redrawn.
+  clock.addEventListener('pointerup', e => {
+    e.preventDefault(); e.stopPropagation();
+    if (lastClockTap !== null && e.timeStamp - lastClockTap < 450) { lastClockTap = null; askToRestart(); }
+    else lastClockTap = e.timeStamp;
+  });
+  clock.addEventListener('dblclick', e => e.preventDefault());
+  clock.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); askToRestart(); } });
+}
+
 const period = (h) => (h < 4 ? 'gece yarısı' : h < 6 ? 'şafak' : h < 10 ? 'sabah' : h < 15 ? 'öğle' : h < 17.5 ? 'ikindi' : h < 19.5 ? 'akşam' : 'gece');
 
 // ------------------------------------------------------------------ frame
 let P = palette(tau), lastInk = '', lastPaper = '';
 let started = false;
 run((t, dt) => {
+  card.classList.toggle('clock-ready', opened);
   dt = document.hidden ? 0 : Math.min(dt || 1 / 60, .05);
   if (scrub === null && !frozenTau && opened) {
     const rate = story ? story.clockRate : 1;
