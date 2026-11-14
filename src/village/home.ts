@@ -341,6 +341,16 @@ export function buildHome(svg: SVGSVGElement) {
     get bagHung() { return bagHung; },
     /** the story allows sleep (at night, when the day is done) */
     canSleep: false,
+    canEat: true,
+    snapshot() { return { step, prep, eaten, made, bagHung, catHome: api.catHome }; },
+    restore(s: Record<string, any>) {
+      step = Math.max(0, Math.min(6, Number(s.step) || 0)); prep = Math.max(0, Math.min(2, Number(s.prep) || 0));
+      eaten = Math.max(0, Math.min(3, Number(s.eaten) || 0)); made = Number(s.made) || 0; bagHung = !!s.bagHung; api.catHome = !!s.catHome;
+      anim = iceT = placeT = bagT = eatT = resetT = -1;
+      (step === 5 ? top : props).appendChild(dish);
+      if (step === 0 && prep === 1) prep = 2;
+    },
+    newDay() { step = 0; prep = 0; eaten = 0; anim = eatT = resetT = iceT = placeT = bagT = -1; },
     get step() { return step; },
     get eaten() { return eaten; },
     /** the close-up sets how far the recipe got */
@@ -358,7 +368,7 @@ export function buildHome(svg: SVGSVGElement) {
       if (w === 'cook' && step < 4 && prep === 2) return step === 0 ? 'Suşi hazırla' : 'Suşiye devam et';
       if (w === 'cook' && step === 4) return 'Tabağı al';
       if (w === 'table' && step === 5) return 'Masaya koy';
-      if (w === 'table' && step === 6) return `Ye · ${3 - eaten} kaldı`;
+      if (w === 'table' && step === 6) return api.canEat ? `Ye · ${3 - eaten} kaldı` : 'Kenta akşam gelecek';
       if (w === 'futon' && api.canSleep && step !== 5) return 'Uyu';
       return null;
     },
@@ -375,9 +385,10 @@ export function buildHome(svg: SVGSVGElement) {
       if (w === 'futon') return 'sleep';
       if (w === 'cook' && step === 4) { step = 5; top.appendChild(dish); return null; }
       if (w === 'table' && step === 5) { step = 6; props.appendChild(dish); say('itadakimasu', [TABLE_TOP[0], TABLE_TOP[1] - 34]); return null; }
-      if (w === 'table' && step === 6) { eatT = 0; return null; }
+      if (w === 'table' && step === 6 && api.canEat) { eatT = 0; return null; }
       return null;
     },
+    get busy() { return busy(); },
     get carrying() { return step === 5; },
     get made() { return made; },
 

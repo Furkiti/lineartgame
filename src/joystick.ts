@@ -20,7 +20,7 @@ export function createJoystick(area: HTMLElement, base: HTMLElement, knob: HTMLE
   };
   // capture phase, so it also works over the lanterns, the canal, the people… (they still get poked)
   area.addEventListener('pointerdown', (e) => {
-    if (id !== null) return;
+    if (id !== null || area.classList.contains('modal-open') || area.classList.contains('controls-locked')) return;
     const t = e.target as Element;
     if (t.closest?.('.drag, #win.show, button, .closeup, .brushpad, .defter, .choices, .letter, #opening, .shodo, .shodo-ui')) return; // sun/moon scrubbing and the win card keep their own touch
     e.preventDefault();
@@ -45,6 +45,7 @@ export function createJoystick(area: HTMLElement, base: HTMLElement, knob: HTMLE
   addEventListener('blur', () => keys.clear());
 
   return {
+    reset() { id = null; v.active = false; v.x = 0; v.y = 0; keys.clear(); base.classList.remove('on'); },
     read() {
       if (v.active) return { x: v.x, y: v.y };
       let x = 0, y = 0;

@@ -60,6 +60,8 @@ export function createPlayer(parent: Element, x: number, y: number) {
   // jacket, belt, collar seam and the bundle's straps
   const torsoG = part();
   const jacket = paint(torsoG, C.jacket);
+  const identityBody = el('path', { fill: 'none', stroke: '#e6cfaa', 'stroke-width': .5, 'stroke-linecap': 'round' }, torsoG);
+  const identityInk = el('path', { fill: 'none', stroke: '#fff2cc', 'stroke-width': 0.8, 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }, torsoG);
   const obi = paint(torsoG, C.obi, PEN * 0.7);
   const seam = el('path', { fill: 'none', stroke: 'currentColor', 'stroke-width': PEN * 0.55, 'stroke-linecap': 'round' }, torsoG);
   const strapPen = () => el('path', { fill: 'none', stroke: 'currentColor', 'stroke-width': PEN * 0.8, 'stroke-linecap': 'round' }, torsoG);
@@ -82,6 +84,7 @@ export function createPlayer(parent: Element, x: number, y: number) {
   const clip = el('clipPath', { id: clipId }, headG);
   const clipHead = el('ellipse', { rx: 3.7, ry: 4.6 }, clip);
   const head = el('ellipse', { rx: 3.7, ry: 4.6, fill: PAPER, stroke: 'currentColor', 'stroke-width': PEN }, headG);
+  const identityHead = el('path', { fill: PAPER, stroke: 'currentColor', 'stroke-width': PEN }, headG);
   const hair = el('path', { fill: 'currentColor', 'fill-rule': 'evenodd', 'clip-path': `url(#${clipId})` }, headG);
   const string = el('path', { fill: 'none', stroke: 'currentColor', 'stroke-width': PEN * 0.45, 'stroke-linecap': 'round' }, headG);
   const hat = paint(headG, C.hat, PEN * 0.85);
@@ -111,6 +114,7 @@ export function createPlayer(parent: Element, x: number, y: number) {
     hands: [x, y - 30] as Vec,
     /** the red bundle on the back (hang it up at home) */
     carryBundle: true,
+    identity: { head: '', mark: '', body: '' },
     setHeading(h: number) { heading = wrap(h); },
     /** Heading in radians: 0 faces right, π/2 faces you, π left, -π/2 away. */
     heading: 0,
@@ -213,6 +217,14 @@ export function createPlayer(parent: Element, x: number, y: number) {
       const seamP = [X(su + 4.4, -2.6, sh[1] + 0.8), X(su + 5.4, 0.6, (sh[1] + hy) / 2), X(fx - 0.6, 2.6, hy - 5.6)];
       seam.setAttribute('d', `M${pt(seamP[0])} Q${pt(seamP[1])} ${pt(seamP[2])}`);
       seam.setAttribute('opacity', f(smooth(-0.45, -0.1, toward)));
+      identityBody.setAttribute('d', self.identity.body);
+      identityBody.setAttribute('transform', `translate(${f(R[1].cx)} ${f(sh[1] + 12)})`);
+      identityBody.setAttribute('opacity', f(1 - smooth(-.8, -.2, toward)));
+      torsoG.appendChild(identityBody);
+      identityInk.setAttribute('d', self.identity.mark);
+      identityInk.setAttribute('transform', `translate(${f(R[1].cx)} ${f(sh[1] + 11)}) scale(${f(.7 + Math.abs(s) * .3)} 1)`);
+      identityInk.setAttribute('opacity', f(smooth(-.4, .2, toward)));
+      torsoG.appendChild(identityInk);
 
       // bundle on the back: swings with the bounce and the stride
       const bobV = (bob - lastBob) / Math.max(dt, 1e-3); lastBob = bob;
@@ -242,6 +254,9 @@ export function createPlayer(parent: Element, x: number, y: number) {
       // head and the kasa, which nods a little behind the bounce
       const hc = X(su + 1.8 + lean * 0.3, 0, sh[1] - 9.6);
       head.setAttribute('cx', f(hc[0])); head.setAttribute('cy', f(hc[1]));
+      identityHead.setAttribute('d', self.identity.head);
+      identityHead.setAttribute('transform', `translate(${f(hc[0])} ${f(hc[1])})`);
+      head.setAttribute('opacity', self.identity.head ? '0' : '1');
       clipHead.setAttribute('cx', f(hc[0])); clipHead.setAttribute('cy', f(hc[1]));
       const facing = (toward + 1) / 2; // 0 away … 0.5 side … 1 toward you
       const faceA = smooth(0.1, 0.55, facing);

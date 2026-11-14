@@ -1,3 +1,5 @@
+import './story/experience.css';
+import { readSave, writeSave } from './story/save.ts';
 // Mürekkep Sokağı — steer a traveller through the ink village with a thumb joystick
 // and gather the paper cranes. The village (street, canal, sky, villagers, critters)
 // comes from github.com/JDhruv14/line-art-animation (MIT).
@@ -28,6 +30,7 @@ Element.prototype.setAttribute = function (name: string, value: string) {
   if (this.getAttribute(name) !== v) setAttr.call(this, name, v);
 };
 const q = new URLSearchParams(location.search);
+const saved = q.has('turna') ? null : readSave();
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;
 const card = $('#card');
 const svg = el('svg', { class: 'village', role: 'img', viewBox: `0 0 ${W} ${H}`, 'aria-label': 'Mürekkeple çizilmiş bir Japon sokağı; joystick ile yürüyen bir yolcu.' });
@@ -57,7 +60,7 @@ const strokeL = layer(svg, { style: 'pointer-events:none' }); // brush ink drawn
 const STORY = !q.has('turna');
 let tau = q.has('tau') ? +q.get('tau') : q.has('start') ? +q.get('start') : STORY ? 0.3 : 0.64;
 let scrub = null; const frozenTau = q.has('tau');
-const DAY_SECONDS = q.has('day') ? +q.get('day') : STORY ? 420 : 150;
+const DAY_SECONDS = q.has('day') ? +q.get('day') : STORY ? 900 : 150;
 
 // ------------------------------------------------------------------ wind from the pointer
 let wind = 0.3, windTarget = 0.3, lastX = null, lastT = 0;
@@ -121,12 +124,13 @@ function addPerson(kind: 'kimono' | 'bike' | 'kid', x?: number) {
 }
 
 // ------------------------------------------------------------------ you, the cranes, the joystick
-const player = createPlayer(walkers, q.has('x') ? +q.get('x') : 200, 368);
+const player = createPlayer(walkers, q.has('x') ? +q.get('x') : saved?.world.x ?? (STORY ? 335 : 200), saved?.world.y ?? 368);
 const cranes = createCranes(walkers, shadowsL, glow);
 const stick = createJoystick(card, $('#stick'), $('#knob'));
 
 // ------------------------------------------------------------------ the bath house at the end of the street is home
 const home = buildHome(svg);
+if (saved) { home.restore(saved.home); player.carryBundle = !home.bagHung; }
 const DOOR = { x: 457, w: 12 }; // the gate at the end of the middle alley
 // walking home means walking into the alley: up the stepping stones to the gate
 const ALLEY = { x: 457, mouth: 12, deep: 326, enter: 332, x0: 450, x1: 464 };
@@ -239,7 +243,7 @@ else { card.classList.add('story'); ($('.score') as HTMLElement).style.display =
 const bannerN = $('#banner');
 const ui = STORY ? createUI(svg) : null;
 const story = STORY && ui ? createStory({
-  svg, card, ui, home, player, cat,
+  svg, card, ui, home, player, cat, saved,
   layers: { front, walkers, glow, stroke: strokeL },
   env: {
     setTau: (v) => { tau = v; },
@@ -254,7 +258,7 @@ card.addEventListener('pointerdown', (e) => story?.touch(e), true);
 
 // ------------------------------------------------------------------ opening: two shoji doors slide apart
 const openingN = $('#opening');
-let opened = !STORY || (q.has('debug') && !q.has('opening'));
+let opened = !!saved || !STORY || (q.has('debug') && !q.has('opening'));
 if (opened) openingN.remove();
 else openingN.addEventListener('click', () => {
   if (opened) return;
@@ -262,6 +266,20 @@ else openingN.addEventListener('click', () => {
   story?.opened();
   setTimeout(() => openingN.remove(), 2400);
 });
+
+if (saved) {
+  if (saved.world.inside) enter(); else if (saved.world.fair) enterFair();
+  player.x = saved.world.x; player.y = saved.world.y; tau = saved.world.tau;
+}
+let saveAt = 0, warnedSave = false;
+function saveGame() {
+  if (!story?.canSave || home.busy) return;
+  const snapshot = story.snapshot();
+  const ok = writeSave({ version: 2, ...snapshot, home: home.snapshot(), world: { x: player.x, y: player.y, inside, fair: inFair, tau } });
+  if (!ok && !warnedSave) { warnedSave = true; hintN.textContent = 'Bu tarayıcı ilerlemeni kaydedemiyor.'; hintN.classList.remove('gone'); }
+}
+addEventListener('pagehide', saveGame);
+document.addEventListener('visibilitychange', () => { if (document.hidden) { saveGame(); stick.reset(); } });
 
 const near = (a: number, b: number, dx: number, ay: number, by: number, dy: number) => Math.abs(a - b) < dx && Math.abs(ay - by) < dy;
 let cdCat = 0, cdBirds = 0, cdTree = 0;
@@ -272,8 +290,12 @@ const period = (h) => (h < 4 ? 'gece yarısı' : h < 6 ? 'şafak' : h < 10 ? 'sa
 let P = palette(tau), lastInk = '', lastPaper = '';
 let started = false;
 run((t, dt) => {
-  dt = dt || 1 / 60;
-  if (scrub === null && !frozenTau) tau = (tau + dt / DAY_SECONDS) % 1;
+  dt = document.hidden ? 0 : Math.min(dt || 1 / 60, .05);
+  if (scrub === null && !frozenTau && opened) {
+    const rate = story ? story.clockRate : 1;
+    tau = STORY ? Math.min(.98, tau + dt * rate / DAY_SECONDS) : (tau + dt / DAY_SECONDS) % 1;
+  }
+  if (story && t > saveAt && !document.hidden) { saveAt = t + 2; saveGame(); }
   P = palette(tau);
   // restyle only when the colour actually changes: every change restyles every line
   const inkS = rgb(P.ink), paperS = rgb(P.paper);
@@ -287,7 +309,7 @@ run((t, dt) => {
   tNow = t;
   let j = stick.read();
   const lock = inside ? home.lock : null;
-  if (pending || lock || story?.freeze) j = { x: 0, y: 0 };
+  if (pending || lock || story?.freeze || !opened) { j = { x: 0, y: 0 }; stick.reset(); }
   if (lock) { const e = 1 - Math.exp(-dt * 10); player.x = lerp(player.x, lock.x, e); player.y = lerp(player.y, lock.y, e); }
   player.faceTo = lock ? lock.heading : null;
   player.pose = inside ? home.pose : { work: 0, chop: 0, hold: 0 };
@@ -298,13 +320,13 @@ run((t, dt) => {
     player.bounds = deep ? { x0: ALLEY.x0, x1: ALLEY.x1, y0: ALLEY.deep } : { ...STREET.bounds, y0: inMouth ? ALLEY.deep : Y_MIN };
     alleyDepth = clamp((Y_MIN - player.y) / (Y_MIN - ALLEY.deep), 0, 1);
     player.scale = 1 - alleyDepth * 0.3;
-    if (player.y < ALLEY.enter && j.y < -0.2 && !pending) go(enter);
+    if (player.y < ALLEY.enter && j.y < -0.2 && !pending && !story?.freeze) go(enter);
   } else player.scale = 1;
   // inside: walk to the genkan door and keep going, and you are out
   if (STORY && inside && !pending && !story?.freeze) {
     const atGenkan = Math.abs(player.x - (home.spawn.x - 4)) < 22 && player.y <= Y_MIN + 1.5;
     exitHold = atGenkan && j.y < -0.35 ? exitHold + dt : 0;
-    if (exitHold > 0.3) { exitHold = 0; go(exit); }
+    if (exitHold > 0.3 && !home.carrying && home.prep !== 1) { exitHold = 0; go(exit); }
   }
   player.update(t, dt, j.x, j.y, P, wind);
   if (!STORY && stick.touched && t > hintUntil) hintN.classList.add('gone');
@@ -447,4 +469,4 @@ run((t, dt) => {
   clock.innerHTML = `<b>${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}</b> <span>${period(hrs)}</span>`;
 });
 
-(window as unknown as { __game: unknown }).__game = { player, cranes, people, home, act, enter, exit, story, ui, get tau() { return tau; }, setTau: (v) => { tau = v; }, get score() { return score; }, get inside() { return inside; }, get inFair() { return inFair; }, enterFair, exitFair };
+(window as unknown as { __game: unknown }).__game = { player, cranes, people, home, act, enter, exit, story, ui, save: saveGame, get tau() { return tau; }, setTau: (v) => { tau = v; }, get score() { return score; }, get inside() { return inside; }, get inFair() { return inFair; }, enterFair, exitFair };

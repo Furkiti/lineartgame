@@ -18,15 +18,28 @@ export function createNotebook(card: HTMLElement) {
 
   const api = {
     get isOpen() { return wrap.classList.contains('show'); },
-    show({ dayN, subtitle, entries, sentence, button, then }: { dayN: number; subtitle: string; entries: Entry[]; sentence: string; button: string; then?: () => void }) {
-      day.textContent = `${dayN}. gün`; sub.textContent = subtitle;
+    show({ dayN, subtitle, entries, sentence, button, then, history = [], seal = '' }: { dayN: number; subtitle: string; entries: Entry[]; sentence: string; button: string; then?: () => void; history?: { dayN: number; entries: Entry[]; sentence: string }[]; seal?: string }) {
+      const pages = [...history.filter(p => p.dayN !== dayN), { dayN, entries, sentence }];
+      let index = pages.length - 1;
+      wrap.querySelector('.memory-nav')?.remove();
+      const nav = document.createElement('div'); nav.className = 'memory-nav'; nav.innerHTML = '<button type="button" aria-label="Önceki gün">‹ Önceki gün</button><span>Hatıralarım</span><button type="button" aria-label="Sonraki gün">Sonraki ›</button>';
+      const prev = nav.querySelector('button')!, next = nav.querySelectorAll('button')[1];
+      wrap.querySelector('.head')!.after(nav);
+      const render = () => {
+      const { dayN: pageDay, entries, sentence } = pages[index];
+      prev.disabled = index === 0; next.disabled = index === pages.length - 1;
+      day.textContent = `${pageDay}. gün`; sub.textContent = index === pages.length - 1 ? subtitle : 'hatıra';
       cells.innerHTML = entries.map((e, i) => `
         <div class="cell ${e.done ? 'done' : 'todo'} ${e.fresh ? 'fresh' : ''}" style="--i:${i}">
           <svg viewBox="0 0 60 60"><path pathLength="1" d="${e.sketch}"/></svg>
-          ${e.done ? '<i class="seal">済</i>' : ''}
+          ${e.done ? `<i class="seal">${seal ? `<svg viewBox="0 0 60 60"><path d="${seal}" style="stroke:#fff4dc;stroke-width:3;fill:none"/></svg>` : '済'}</i>` : ''}
           <b>${e.title}</b><small>${e.done ? '' : e.hint}</small>
         </div>`).join('');
       line.textContent = sentence;
+      };
+      prev.addEventListener('click', () => { if (index > 0) { index--; render(); } });
+      next.addEventListener('click', () => { if (index < pages.length - 1) { index++; render(); } });
+      render(); nav.hidden = pages.length < 2;
       close.textContent = button;
       onClose = then ?? null;
       wrap.classList.add('show');

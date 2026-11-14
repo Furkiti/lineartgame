@@ -177,7 +177,7 @@ export function run(draw: (t: number, dt: number) => void): () => void {
     return () => {};
   }
   const frozen = q.has('t') ? Number(q.get('t')) : null;
-  const still = frozen !== null || matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const still = frozen !== null; // Reduced motion must not stop input, time, or the game loop.
   const t0 = performance.now();
   let id = 0, prev = 0;
   const tick = (now: number) => {
