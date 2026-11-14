@@ -33,12 +33,14 @@ type Cam = { cx: number; cy: number; z: number } | null;
 type Wait = number | (() => boolean);
 type Scene = Generator<Wait, void, unknown>;
 
-const KENTA_HOME: Vec = [436, 357];
+const KENTA_HOME: Vec = [392, 357];
 const STUCK: Vec = [486, 196];
-const LAMP: Vec = [446, 352];
-const DOOR_X = 826;
-const PLATE: Vec = [861, 307];           // the nameplate by your door
-const LANTERN = { x: 760, top: 293, cy: 309, r: 8.2, h: 22 };
+const LAMP: Vec = [400, 352];          // the street lamp on the pole
+// home is down the alley in the middle of the street: the little gate at its end
+const DOOR_X = 457;
+const PLATE: Vec = [441, 302];           // the nameplate on the alley wall
+const LANTERN = { x: 475, top: 272, cy: 287, r: 8.2, h: 22 };
+const BATH_X = 826;                      // the big building at the east end is the neighbourhood bath
 const CAT: Vec = [548, 330];
 const BENCH = { x0: 516, x1: 600, y: 330 };
 const WARM = hex('#ffcf7e');
@@ -75,9 +77,9 @@ export function createStory(o: {
   const plateText = el('text', { x: PLATE[0], y: PLATE[1] - 1, 'font-size': 6.2, 'font-weight': 700, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'writing-mode': 'vertical-rl', 'font-family': '"Hiragino Mincho ProN","Yu Mincho","Noto Serif JP",serif', fill: 'currentColor' }, homeFront);
   plateText.textContent = '旅人';
   el('path', { d: `M${PLATE[0] - 2} ${PLATE[1] + 7} l2 -1.6 l2 1.6 l-2 1.6Z`, fill: '#c8423a' }, homeFront);
-  el('path', { d: 'M870 302 L884 302 L884 315 L870 315Z M872 306 L882 306', fill: '#a8794d', stroke: 'currentColor', 'stroke-width': 0.6 }, homeFront);
-  const mailFlag = el('path', { d: 'M884 303 L884 293 L890 294.8 L884 296.8', fill: '#c8423a', stroke: 'currentColor', 'stroke-width': 0.4 }, homeFront);
-  const MAIL_X = 877;
+  const MAIL_X = 434, MB = MAIL_X - 7;
+  el('path', { d: `M${MB} 318 L${MB + 14} 318 L${MB + 14} 331 L${MB} 331Z M${MB + 2} 322 L${MB + 12} 322 M${MB + 7} 331 L${MB + 7} 344`, fill: '#a8794d', stroke: 'currentColor', 'stroke-width': 0.6 }, homeFront);
+  const mailFlag = el('path', { d: `M${MB + 14} 319 L${MB + 14} 309 L${MB + 20} 310.8 L${MB + 14} 312.8`, fill: '#c8423a', stroke: 'currentColor', 'stroke-width': 0.4 }, homeFront);
   const letterN = document.createElement('div'); letterN.className = 'letter';
   letterN.innerHTML = `<div class="paper"><p class="to">Sevgili yeni komşum,</p>
     <p>Bu akşam sokağın batı ucunda, kanalın döndüğü yerde <b>yaz panayırı</b> var.
@@ -333,7 +335,7 @@ export function createStory(o: {
     // the same line weight on screen however close the camera is
     stroke.setScale(what === 'lantern' ? 0.32 : what === 'toy' ? 0.62 : 1);
     if (what === 'kite') {
-      cam = fit(372, 148, 524, 388, 2.4);
+      cam = fit(330, 148, 500, 388, 2.4);
       kenta.dir = 1;
       env.tip('Kenta’ya bir uçurtma çiz. Nasıl çizersen öyle olur.', true);
       const c: Vec = [kenta.x + 36, 292];
@@ -396,7 +398,7 @@ export function createStory(o: {
     yield 1.1;
     kenta.hop(); kenta.want.raise = 1; kenta.want.sad = 0; kenta.want.look = 0.6;
     sfx.pop(); ui.heart(kentaHead());
-    cam = fit(360, 110, 530, 388, 2.2);
+    cam = fit(330, 110, 510, 388, 2.2);
     yield 1.8;
     ui.say(kentaHead, corners <= 1 ? 'Yuvarlak bir uçurtma! Hiç görmemiştim!' : corners >= 5 ? 'Yıldız gibi bir uçurtma! Çok güzel!' : corners === 2 ? 'Ne tuhaf, ne güzel bir uçurtma!' : 'Tam bir uçurtma! Benim uçurtmam!');
     q.kite = 'done'; mark('kite'); sfx.success();
@@ -538,7 +540,7 @@ export function createStory(o: {
     cam = fit(MAIL_X - 50, 260, MAIL_X + 30, 380, 3);
     player.faceTo = -Math.PI / 2;
     yield 0.9;
-    mailFlag.setAttribute('d', 'M884 303 L894 303 L892.4 309 L884 307');
+    mailFlag.setAttribute('d', `M${MB + 14} 319 L${MB + 24} 319 L${MB + 22.4} 325 L${MB + 14} 323`);
     sfx.paper();
     letterClosed = false; letterN.classList.add('show');
     yield () => letterClosed;
@@ -607,7 +609,7 @@ export function createStory(o: {
     toLamp();
   }
 
-  let stillT = 0, foxSit = 0, foxDone = 0, toldStill = false, insideKey = '', arrived = false, ateSeen = 0;
+  let stillT = 0, foxSit = 0, foxDone = 0, toldStill = false, insideKey = '', arrived = false, ateSeen = 0, bathSeen = false;
   function* foxMoment(): Scene {
     mode = 'cine';
     q.fox = true; mark('fox'); sfx.chime(); haptic(12);
@@ -643,11 +645,11 @@ export function createStory(o: {
 
   // ------------------------------------------------------------------ what the action button offers on the street
   const nearKenta = () => Math.abs(player.x - kenta.x) < 34 && Math.abs(player.y - kenta.y) < 18 && kenta.g.style.display !== 'none';
-  const nearLantern = () => Math.abs(player.x - L.x) < 20;
+  const nearLantern = () => Math.abs(player.x - L.x) < 6;
   const nearCat = () => Math.abs(player.x - CAT[0]) < 30 && cat.g.style.display !== 'none';
   function offer(): { label: string; go: () => void } | null {
     if (ctx.inside || ctx.fair || (script && blocks)) return null;
-    if (!q.letter && Math.abs(player.x - MAIL_X) < 13) return { label: 'Mektubu al', go: () => run(readLetter()) };
+    if (!q.letter && Math.abs(player.x - MAIL_X) < 8) return { label: 'Mektubu al', go: () => run(readLetter()) };
     if (q.kite !== 'done' && nearKenta()) return q.kite === 'sad' ? { label: 'Kenta ile konuş', go: () => run(talk()) } : { label: 'Fırçayı çıkar', go: () => startBrush('kite') };
     if (q.kite === 'done' && !q.lantern && nearLantern()) return { label: 'Fenere bir şey çiz', go: () => startBrush('lantern') };
     if (q.kite === 'done' && !q.toy && nearCat()) return { label: 'Kediye oyuncak çiz', go: () => run(toyPick()) };
@@ -693,7 +695,7 @@ export function createStory(o: {
 
       // street Kenta: sad under the tree, then flying his kite, wandering a little
       if (kenta.g.style.display !== 'none') {
-        if (q.kite === 'done' && !kenta.walking && Math.random() < dt * 0.2) kenta.walkTo(410 + Math.random() * 60, 353 + Math.random() * 8);
+        if (q.kite === 'done' && !kenta.walking && Math.random() < dt * 0.2) kenta.walkTo(366 + Math.random() * 50, 353 + Math.random() * 8);
         kenta.speed = q.kite === 'done' ? 14 : 20;
         kenta.draw(t, dt, P);
         if (q.kite !== 'done' && mode === 'walk' && !(script && blocks)) {
@@ -750,8 +752,10 @@ export function createStory(o: {
       if (q.dinner !== 'kenta' && c.inside && home.step === 6 && home.eaten > ateSeen) { ateSeen = home.eaten; if (ateSeen === 1) think('Mm. Pirinç tam kıvamında.', 2.4); }
       if (q.dinner !== 'kenta' && q.kite === 'done' && !q.sushi && c.inside && home.step === 0 && ateSeen >= 3 && !script) run(dinnerAlone());
 
+      // the old bath house: just a passing thought
+      if (!bathSeen && q.kite === 'done' && !c.inside && !c.fair && Math.abs(player.x - BATH_X) < 40 && mode === 'walk' && !script) { bathSeen = true; think('Mahallenin hamamı. Akşamları bacasından buhar tüter.', 3.2); }
       // first time at your door
-      if (!arrived && q.kite === 'done' && !c.inside && !c.fair && Math.abs(player.x - DOOR_X) < 50 && mode === 'walk' && !script) { arrived = true; run(homeArrive()); }
+      if (!arrived && q.kite === 'done' && !c.inside && !c.fair && Math.abs(player.x - DOOR_X) < 30 && mode === 'walk' && !script) { arrived = true; run(homeArrive()); }
 
       // night: the fox under the lamp
       fox.draw(t, dt, { inkT: P.inkT, night: P.night });

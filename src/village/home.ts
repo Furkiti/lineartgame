@@ -152,7 +152,7 @@ export function buildHome(svg: SVGSVGElement) {
   C_(house, rect(13, 278, 67, 282), rgb(COL.wood), SP * 0.7);
   // a short noren inside the door
   C_(house, `M18 283 L39 283 L38.6 296 L18.4 296.4Z M41 283 L62 283 L61.6 296.4 L41.4 296Z`, rgb(COL.indigo), SP * 0.6);
-  text(house, 40, 289.6, 'ゆ', 7, { fill: '#f3ead8' });
+  text(house, 40, 289.6, '旅', 7, { fill: '#f3ead8' });
   // sandals on the earth floor
   B_(house, 'M30 356 q3 -1.6 7 0 q0.8 1.6 -1 2 l-5 0 q-1.6 -0.4 -1 -2Z M39 357 q3 -1.6 7 0 q0.8 1.6 -1 2 l-5 0 q-1.6 -0.4 -1 -2Z');
   // umbrella in a stand
