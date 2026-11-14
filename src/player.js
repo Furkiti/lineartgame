@@ -93,7 +93,9 @@ export function createPlayer(parent, x, y) {
     const self = {
         g, x, y, dir: 1, speed: 0, running: 0, moving: 0,
         /** Where the figure may walk, in scene units. */
-        bounds: { x0: 14, x1: 946 },
+        bounds: { x0: 14, x1: 946, y0: Y_MIN },
+        /** smaller when farther in (walking up an alley) */
+        scale: 1,
         /** Arm poses to blend toward, each 0…1: working at a counter, chopping with the right hand, carrying a tray. */
         pose: { work: 0, chop: 0, hold: 0 },
         /** When set, the body turns to this heading instead of following the stick. */
@@ -131,7 +133,7 @@ export function createPlayer(parent, x, y) {
                 self.y += (jy / m) * speed * 0.6 * dt;
             }
             self.x = clamp(self.x, self.bounds.x0, self.bounds.x1);
-            self.y = clamp(self.y, Y_MIN, Y_MAX);
+            self.y = clamp(self.y, self.bounds.y0 ?? Y_MIN, Y_MAX);
             self.speed = speed;
             self.running = r * go;
             self.moving = go;
@@ -140,7 +142,7 @@ export function createPlayer(parent, x, y) {
             self.face = c;
             if (Math.abs(c) > 0.2)
                 self.dir = c > 0 ? 1 : -1;
-            g.setAttribute('transform', `translate(${f(self.x)} ${f(self.y)}) scale(${f(FS)}) translate(-40 -120)`);
+            g.setAttribute('transform', `translate(${f(self.x)} ${f(self.y)}) scale(${f(FS * self.scale)}) translate(-40 -120)`);
             // body frame → figure space. depth > 0 is toward you.
             const X = (u, w, v) => [40 + u * c + w * s, v + (u * s - w * c) * PITCH];
             const depth = (u, w) => u * s - w * c;
@@ -285,7 +287,7 @@ export function createPlayer(parent, x, y) {
                 hands[i].setAttribute('cy', f(hand[1]));
                 armDepth[i] = depth(su0, w);
             });
-            self.hands = [self.x + (handSum[0] - 40) * FS, self.y + (handSum[1] - 120) * FS];
+            self.hands = [self.x + (handSum[0] - 40) * FS * self.scale, self.y + (handSum[1] - 120) * FS * self.scale];
             bundleG.style.display = self.carryBundle ? '' : 'none';
             straps.forEach((pair) => pair.forEach((n) => n.style.display = self.carryBundle ? '' : 'none'));
             // painter's order, nearest last

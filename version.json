@@ -1,9 +1,9 @@
 {
   "name": "Mürekkep Sokağı",
-  "version": "0.7.1",
-  "commit": "c36bd45dcb7c05d844bde379e0d5c03ea5cb115b",
-  "shortCommit": "c36bd45",
+  "version": "0.7.2",
+  "commit": "65216c43e3cd8027a8a9dac9959a718543823e3c",
+  "shortCommit": "65216c4",
   "branch": "main",
-  "message": "Ev ortadaki ara sokakta, direk sola kaydı",
-  "deployedAt": "2026-11-14T16:32:56Z"
+  "message": "Eve girmek ara sokağa yürümek",
+  "deployedAt": "2026-11-14T18:45:39Z"
 }
