@@ -199,7 +199,7 @@ export function buildCanal({ ground, canalL, willowL, glow }, defs) {
                 fl.dot.setAttribute('opacity', f(P.night * (0.3 + 0.7 * b)));
             });
             moths.forEach((m, i) => {
-                const a = t * m.sp + m.ph, x = 446 + Math.cos(a) * m.r + Math.sin(a * 2.7) * 3, y = 240 + Math.sin(a * 1.3) * m.r * 0.6;
+                const a = t * m.sp + m.ph, x = 400 + Math.cos(a) * m.r + Math.sin(a * 2.7) * 3, y = 240 + Math.sin(a * 1.3) * m.r * 0.6;
                 m.n.setAttribute('cx', f(x));
                 m.n.setAttribute('cy', f(y));
                 m.n.setAttribute('opacity', f(lampOn * (0.6 + 0.4 * Math.sin(a * 5))));

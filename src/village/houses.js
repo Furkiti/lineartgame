@@ -395,8 +395,10 @@ export function buildStreet(layers, defs) {
     // lanterns at the bath
     lanterns.push(chochin(h4, glow, 790, 262, { r: 5.6, h: 13, label: 'ゆ' }));
     lanterns.push(chochin(h4, glow, 862, 262, { r: 5.6, h: 13, label: 'ゆ' }));
-    // ---------- utility pole, wires, street lamp (in front of the alley)
+    // ---------- utility pole, wires, street lamp (just west of the alley, so the way home is clear)
+    const POLE_DX = -46, LAMP_X = 446 + POLE_DX;
     const pole = g(front);
+    pole.setAttribute('transform', `translate(${POLE_DX} 0)`);
     S(pole, 'M465 352 L466.5 98 L470.5 98 L472 352Z', SP * 0.9);
     P(pole, 'M466 140 L471 140 M466 200 L471 200 M466 260 L471 260 M466 320 L471 320', SP * 0.5);
     S(pole, rect(446, 110, 490, 114), SP * 0.8);
@@ -407,19 +409,20 @@ export function buildStreet(layers, defs) {
     P(pole, 'M466 226 Q452 222 446 230', SP * 0.8);
     S(pole, 'M439 230 L453 230 L450 236 L442 236Z', SP * 0.8);
     const streetLamp = el('ellipse', { cx: 446, cy: 237, rx: 3, ry: 1.6, fill: PAPER, stroke: 'currentColor', 'stroke-width': SP * 0.5 }, pole);
-    const lampCone = el('path', { d: 'M441 237 L451 237 L496 352 L396 352Z', fill: 'url(#v-cone)', opacity: 0 }, glow);
+    const lampCone = el('path', { d: `M${LAMP_X - 5} 237 L${LAMP_X + 5} 237 L${LAMP_X + 50} 352 L${LAMP_X - 50} 352Z`, fill: 'url(#v-cone)', opacity: 0 }, glow);
     const cone = el('linearGradient', { id: 'v-cone', x1: 0, y1: 0, x2: 0, y2: 1 }, defs);
     el('stop', { offset: 0, 'stop-color': '#ffe2a8', 'stop-opacity': 0.5 }, cone);
     el('stop', { offset: 1, 'stop-color': '#ffe2a8', 'stop-opacity': 0.06 }, cone);
-    const lampGlow = el('circle', { cx: 446, cy: 237, r: 34, fill: 'url(#v-warmglow)', opacity: 0 }, glow);
+    const lampGlow = el('circle', { cx: LAMP_X, cy: 237, r: 34, fill: 'url(#v-warmglow)', opacity: 0 }, glow);
     // wires sag to both sides; sparrows sit on the right-hand wire
-    const wireY = (x) => { if (x >= 488) {
-        const u = (x - 488) / (970 - 488);
+    const WR = 488 + POLE_DX, WL = 446 + POLE_DX;
+    const wireY = (x) => { if (x >= WR) {
+        const u = (x - WR) / (970 - WR);
         return 112 + (108 - 112) * u + 26 * 4 * u * (1 - u);
-    } const u = (446 - x) / (446 + 10); return 112 + (104 - 112) * u + 22 * 4 * u * (1 - u); };
+    } const u = (WL - x) / (WL + 10); return 112 + (104 - 112) * u + 22 * 4 * u * (1 - u); };
     const wires = g(back);
     const wd = [];
-    for (const [a, b, off] of [[488, 970, 0], [446, -10, 0], [488, 970, 7], [446, -10, 7]]) {
+    for (const [a, b, off] of [[WR, 970, 0], [WL, -10, 0], [WR, 970, 7], [WL, -10, 7]]) {
         const pts = [];
         for (let k = 0; k <= 30; k++) {
             const x = lerp(a, b, k / 30);
@@ -508,7 +511,7 @@ export function buildStreet(layers, defs) {
         bench: { x0: 518, x1: 598, y: 330 },
         chimney: [901, 64],
         wireY,
-        lamp: { node: streetLamp, cone: lampCone, glow: lampGlow, x: 446, y: 237 },
+        lamp: { node: streetLamp, cone: lampCone, glow: lampGlow, x: LAMP_X, y: 237 },
         applyRed(P_) {
             const c = rgb(mix(RED, RED_NIGHT, P_.inkT));
             parasol.setAttribute('fill', c);

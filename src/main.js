@@ -84,7 +84,7 @@ const cat = createCat(catL, glow, { x: 548, y: 330 });
 const boat = createBoat(boatL, glow, { onRipple: (x, y) => canal.ring(x, y, 2) });
 street.windows.forEach((w) => canal.addRefl(() => w.lit, (w.x0 + w.x1) / 2, Math.min(40, (w.x1 - w.x0) * 0.8)));
 street.lanterns.forEach((l) => canal.addRefl(() => smooth(l.thr, l.thr + 0.2, P.lamp), l.x, 8));
-canal.addRefl(() => smooth(0.2, 0.45, P.lamp), 446, 14);
+canal.addRefl(() => smooth(0.2, 0.45, P.lamp), street.lamp.x, 14);
 street.lanterns.forEach((l) => { l.grp.style.cursor = 'pointer'; on(l.grp, () => l.poke()); });
 street.norens.forEach((n) => { n.grp.style.cursor = 'pointer'; on(n.grp, () => n.poke()); });
 const hits = layer(scene);
@@ -124,7 +124,7 @@ const cranes = createCranes(walkers, shadowsL, glow);
 const stick = createJoystick(card, $('#stick'), $('#knob'));
 // ------------------------------------------------------------------ the bath house at the end of the street is home
 const home = buildHome(svg);
-const DOOR = { x: 826, w: 24 };
+const DOOR = { x: 457, w: 12 }; // the gate at the end of the middle alley
 const STREET = { bounds: { x0: 14, x1: 946 }, view: { x0: 0, x1: W } };
 let inside = false, inFair = false, fade = 0, fadeTo = 0, pending = null, hintUntil = -1, tNow = 0, tipUntil = -1;
 const fadeN = $('#fade'), actN = $('#act');
@@ -383,7 +383,7 @@ run((t, dt) => {
     fadeN.style.opacity = f(fade);
     story?.update({ t, dt, P, wind, tau, inside, fair: inFair, base: { w: vb.w, h: vb.h }, stickActive: stick.active, stickTouched: stick.touched });
     const sp = story ? story.prompt() : null;
-    const label = pending || sp === '' ? null : sp ?? (inside ? home.prompt(player) : atFairGate() ? (inFair ? 'Sokağa dön' : 'Panayıra git') : atDoor() && !winN.classList.contains('show') ? 'İçeri gir' : null);
+    const label = pending || sp === '' ? null : sp ?? (inside ? home.prompt(player) : atFairGate() ? (inFair ? 'Sokağa dön' : 'Panayıra git') : atDoor() && !winN.classList.contains('show') ? (STORY ? 'Eve gir' : 'İçeri gir') : null);
     if (label && actN.textContent !== label)
         actN.textContent = label;
     actN.classList.toggle('show', !!label);

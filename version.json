@@ -1,9 +1,9 @@
 {
   "name": "Mürekkep Sokağı",
-  "version": "0.7.0",
-  "commit": "09b89af3fa09c0cbab48c440cdf6cc59995757c0",
-  "shortCommit": "09b89af",
+  "version": "0.7.1",
+  "commit": "c36bd45dcb7c05d844bde379e0d5c03ea5cb115b",
+  "shortCommit": "c36bd45",
   "branch": "main",
-  "message": "Atölye ve kaligrafi siparişi, şablonlu kedi oyuncağı, daha hızlı yürüyüş",
-  "deployedAt": "2026-11-12T23:32:50Z"
+  "message": "Ev ortadaki ara sokakta, direk sola kaydı",
+  "deployedAt": "2026-11-14T16:32:56Z"
 }
