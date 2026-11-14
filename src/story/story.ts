@@ -610,6 +610,7 @@ export function createStory(o: {
   }
 
   let stillT = 0, foxSit = 0, foxDone = 0, toldStill = false, insideKey = '', arrived = false, ateSeen = 0, bathSeen = false;
+  let alleyTaught = 0, exitTaught = 0, insideT = 0; // 0 not yet · >0 showing until this time · -1 done
   function* foxMoment(): Scene {
     mode = 'cine';
     q.fox = true; mark('fox'); sfx.chime(); haptic(12);
@@ -752,10 +753,23 @@ export function createStory(o: {
       if (q.dinner !== 'kenta' && c.inside && home.step === 6 && home.eaten > ateSeen) { ateSeen = home.eaten; if (ateSeen === 1) think('Mm. Pirinç tam kıvamında.', 2.4); }
       if (q.dinner !== 'kenta' && q.kite === 'done' && !q.sushi && c.inside && home.step === 0 && ateSeen >= 3 && !script) run(dinnerAlone());
 
+      // show once how to walk into the alley (that is the way home) and out of the house again
+      const calm = mode === 'walk' && !(script && blocks);
+      if (alleyTaught === 0 && calm && !c.inside && !c.fair && q.kite === 'done' && Math.abs(player.x - DOOR_X) < 16) {
+        alleyTaught = t + 6; env.tip('Ara sokağa doğru yürü: eve gidersin.');
+        ui.showGesture('path', () => [[DOOR_X + 2, 380], [DOOR_X + 2, 338]], { period: 2 });
+      }
+      if (alleyTaught > 0 && (c.inside || t > alleyTaught)) { alleyTaught = -1; ui.hideGesture(); }
+      insideT = c.inside ? insideT + dt : 0;
+      if (exitTaught === 0 && calm && c.inside && insideT > 12 && Math.abs(player.x - (IX + 40)) < 26) {
+        exitTaught = t + 5; env.tip('Dışarı çıkmak için kapıya doğru yürü.');
+        ui.showGesture('path', () => [[IX + 40, 378], [IX + 40, 352]], { period: 2 });
+      }
+      if (exitTaught > 0 && (!c.inside || t > exitTaught)) { exitTaught = -1; ui.hideGesture(); }
       // the old bath house: just a passing thought
       if (!bathSeen && q.kite === 'done' && !c.inside && !c.fair && Math.abs(player.x - BATH_X) < 40 && mode === 'walk' && !script) { bathSeen = true; think('Mahallenin hamamı. Akşamları bacasından buhar tüter.', 3.2); }
       // first time at your door
-      if (!arrived && q.kite === 'done' && !c.inside && !c.fair && Math.abs(player.x - DOOR_X) < 30 && mode === 'walk' && !script) { arrived = true; run(homeArrive()); }
+      if (!arrived && q.kite === 'done' && !c.inside && !c.fair && Math.abs(player.x - DOOR_X) < 30 && player.y > 350 && mode === 'walk' && !script) { arrived = true; run(homeArrive()); }
 
       // night: the fox under the lamp
       fox.draw(t, dt, { inkT: P.inkT, night: P.night });

@@ -128,6 +128,9 @@ const stick = createJoystick(card, $('#stick'), $('#knob'));
 // ------------------------------------------------------------------ the bath house at the end of the street is home
 const home = buildHome(svg);
 const DOOR = { x: 457, w: 12 }; // the gate at the end of the middle alley
+// walking home means walking into the alley: up the stepping stones to the gate
+const ALLEY = { x: 457, mouth: 12, deep: 326, enter: 332, x0: 450, x1: 464 };
+let exitHold = 0;
 const STREET = { bounds: { x0: 14, x1: 946 }, view: { x0: 0, x1: W } };
 let inside = false, inFair = false, fade = 0, fadeTo = 0, pending: (() => void) | null = null, hintUntil = -1, tNow = 0, tipUntil = -1;
 const fadeN = $('#fade'), actN = $<HTMLButtonElement>('#act');
@@ -138,7 +141,7 @@ function enter() {
   home.root.style.display = '';
   home.actors.appendChild(player.g);
   player.x = home.spawn.x; player.y = home.spawn.y; player.setHeading(Math.PI / 2);
-  player.bounds = home.bounds; camSnap = true;
+  player.bounds = { ...home.bounds, y0: Y_MIN }; camSnap = true;
   if (!STORY && home.made === 0) { hintN.innerHTML = 'Mutfağa geç, tezgâhta suşi hazırla.'; hintN.classList.remove('gone'); hintUntil = tNow + 4; }
 }
 function exit() {
@@ -146,8 +149,9 @@ function exit() {
   [skyL, scene, glow, strokeL].forEach((n) => (n.style.display = ''));
   home.root.style.display = 'none';
   walkers.appendChild(player.g);
-  player.x = DOOR.x; player.y = Y_MIN + 3; player.setHeading(Math.PI / 2);
-  player.bounds = STREET.bounds; camSnap = true;
+  // you come out of the gate, at the far end of the alley, facing the street
+  player.x = DOOR.x; player.y = STORY ? ALLEY.enter + 4 : Y_MIN + 3; player.setHeading(Math.PI / 2);
+  player.bounds = { ...STREET.bounds, y0: STORY ? ALLEY.deep : Y_MIN }; camSnap = true;
 }
 const atDoor = () => !inside && !inFair && Math.abs(player.x - DOOR.x) < DOOR.w && player.y < 362;
 
@@ -167,7 +171,7 @@ function enterFair() {
   fair.root.style.display = '';
   fair.actors.appendChild(player.g);
   player.x = fair.spawn.x; player.y = fair.spawn.y; player.setHeading(0);
-  player.bounds = fair.bounds; camSnap = true;
+  player.bounds = { ...fair.bounds, y0: Y_MIN }; camSnap = true;
   if (!fairSeen && STORY) { fairSeen = true; story?.onFair(); }
 }
 function exitFair() {
@@ -176,14 +180,14 @@ function exitFair() {
   fair.root.style.display = 'none';
   walkers.appendChild(player.g);
   player.x = 40; player.y = 362; player.setHeading(0);
-  player.bounds = STREET.bounds; camSnap = true;
+  player.bounds = { ...STREET.bounds, y0: Y_MIN }; camSnap = true;
 }
 const atFairGate = () => !inside && player.x < 44;
 function act() {
   if (pending || winN.classList.contains('show')) return;
   if (story?.act()) return;
   if (!inside && atFairGate()) { go(inFair ? exitFair : enterFair); return; }
-  if (!inside) { if (atDoor()) go(enter); return; }
+  if (!inside) { if (atDoor() && !STORY) go(enter); return; }
   const r = home.act(player);
   if (r === 'exit') go(exit);
   else if ((r === 'cook' || r === 'sleep') && story) story.onHome(r);
@@ -287,6 +291,21 @@ run((t, dt) => {
   if (lock) { const e = 1 - Math.exp(-dt * 10); player.x = lerp(player.x, lock.x, e); player.y = lerp(player.y, lock.y, e); }
   player.faceTo = lock ? lock.heading : null;
   player.pose = inside ? home.pose : { work: 0, chop: 0, hold: 0 };
+  // the alley: past its mouth you can walk in, growing smaller, the street falling behind
+  let alleyDepth = 0;
+  if (STORY && !inside && !inFair) {
+    const deep = player.y < Y_MIN - 0.5, inMouth = Math.abs(player.x - ALLEY.x) < ALLEY.mouth;
+    player.bounds = deep ? { x0: ALLEY.x0, x1: ALLEY.x1, y0: ALLEY.deep } : { ...STREET.bounds, y0: inMouth ? ALLEY.deep : Y_MIN };
+    alleyDepth = clamp((Y_MIN - player.y) / (Y_MIN - ALLEY.deep), 0, 1);
+    player.scale = 1 - alleyDepth * 0.3;
+    if (player.y < ALLEY.enter && j.y < -0.2 && !pending) go(enter);
+  } else player.scale = 1;
+  // inside: walk to the genkan door and keep going, and you are out
+  if (STORY && inside && !pending && !story?.freeze) {
+    const atGenkan = Math.abs(player.x - (home.spawn.x - 4)) < 22 && player.y <= Y_MIN + 1.5;
+    exitHold = atGenkan && j.y < -0.35 ? exitHold + dt : 0;
+    if (exitHold > 0.3) { exitHold = 0; go(exit); }
+  }
   player.update(t, dt, j.x, j.y, P, wind);
   if (!STORY && stick.touched && t > hintUntil) hintN.classList.add('gone');
   if (STORY && tipUntil > 0 && t > tipUntil) { hintN.classList.add('gone'); tipUntil = -1; }
@@ -299,7 +318,8 @@ run((t, dt) => {
   fadeN.style.opacity = f(fade);
   story?.update({ t, dt, P, wind, tau, inside, fair: inFair, base: { w: vb.w, h: vb.h }, stickActive: stick.active, stickTouched: stick.touched });
   const sp = story ? story.prompt() : null;
-  const label = pending || sp === '' ? null : sp ?? (inside ? home.prompt(player) : atFairGate() ? (inFair ? 'Sokağa dön' : 'Panayıra git') : atDoor() && !winN.classList.contains('show') ? (STORY ? 'Eve gir' : 'İçeri gir') : null);
+  const hp = inside ? home.prompt(player) : null;
+  const label = pending || sp === '' ? null : sp ?? (inside ? (STORY && hp === 'Dışarı çık' ? null : hp) : atFairGate() ? (inFair ? 'Sokağa dön' : 'Panayıra git') : atDoor() && !winN.classList.contains('show') && !STORY ? 'İçeri gir' : null);
   if (label && actN.textContent !== label) actN.textContent = label;
   actN.classList.toggle('show', !!label);
 
@@ -325,6 +345,7 @@ run((t, dt) => {
     // feet two-thirds of the way down the frame (street level ~366, floor ~362)
     const ratio = portrait || inside ? 0.67 : 0.76;
     follow = { cx: camAnchor + camLead, cy: (inside ? 362 : 366) - (ratio - 0.5) * h, z };
+    if (alleyDepth > 0) follow = { cx: lerp(follow.cx, ALLEY.x, alleyDepth), cy: lerp(follow.cy, 300, alleyDepth * 0.8), z: z * (1 + alleyDepth * 0.7) };
   }
   const want = story?.cam ?? follow;
   if (camSnap) { cam = { ...want }; camSnap = false; }
