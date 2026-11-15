@@ -1,0 +1,50 @@
+const assert=require('node:assert/strict');
+const {launchGame}=require('./driver.cjs');
+let d;
+const seed={version:2,story:{arcVersion:5,day:2,dayIntro:2,created:true,walkLearned:true,guideMet:true,met:true,kite:'done',dinner:'alone',visit:'done',homeShown:true,visitedHome:true,order:true,fresh:[]},world:{x:657,y:356,inside:false,fair:false,tau:.36},home:{bagHung:false},art:{}};
+(async()=>{
+ d=await launchGame({seed});const{page:p}=d;
+ await d.drive(0,-1);await p.waitForFunction(()=>__game.inMarket);await d.drive(0,0);await p.waitForTimeout(1000);
+ assert.equal(await p.locator('[data-scene=market]').isVisible(),true);
+ await p.screenshot({path:'.local/v6-market-entry.png'});
+ async function visit(x,y){await d.walkTo(2860,y);await d.walkTo(2600+x,y);}
+ async function center(y){await d.walkTo(2860,y);}
+ await visit(125,458);await d.action('Nori ile çay doldur');
+ const tau=await p.evaluate(()=>__game.tau);
+ const teaPoint=(await d.mapSVG('.market-tea svg',[[160,270]]))[0];
+ await d.hold(teaPoint,1.1);
+ const partial=await p.locator('[data-tea]').getAttribute('d');
+ await p.waitForTimeout(700);assert.equal(await p.locator('[data-tea]').getAttribute('d'),partial,'releasing pauses pouring');
+ assert.equal(await p.evaluate(()=>__game.tau),tau,'tea activity pauses time');
+ await p.screenshot({path:'.local/v6-market-tea.png'});
+ await d.holdUntil(teaPoint,()=>__game.market.snapshot().pour>=1);await p.waitForSelector('.market-tea.show',{state:'hidden'});
+ assert.equal(await p.evaluate(()=>__game.market.snapshot().tea),true);
+ await center(458);await d.walkTo(2860,578);await visit(395,578);await d.action('Momo ile dango diz');
+ await d.parts();await p.waitForSelector('.handwork.show',{state:'hidden'});
+ assert.equal(await p.evaluate(()=>__game.market.snapshot().dango),true);
+ await center(578);await d.walkTo(2860,698);await visit(124,698);await d.action('Rei ile kart çiz');
+ await d.paperDraw();assert.equal(await p.locator('[data-market-postcard=stall] path').count(),3);
+ await p.evaluate(()=>__game.save());
+ await p.reload();await p.waitForFunction(()=>__game.inMarket);
+ assert.equal(await p.evaluate(()=>__game.market.snapshot().postcard.length),2);
+ assert.equal(await p.evaluate(()=>__game.market.snapshot().tea),true);
+ assert.equal(await p.evaluate(()=>__game.market.snapshot().dango),true);
+ await p.waitForTimeout(1000);await p.screenshot({path:'.local/v6-market-paper-saved.png'});
+ // Actually pass behind Rei's stall by taking its side corridor, then approach its front.
+ await center(698);await d.walkTo(2860,638);await d.walkTo(2724,638);
+ let order=await p.evaluate(()=>{const d=document.querySelector('[data-market-depth]');return[...d.children].indexOf(__game.player.g)<[...d.children].indexOf(d.querySelector('[data-stall=paper]'));});
+ assert(order,'stall occludes the traveller behind it');
+ await p.screenshot({path:'.local/v6-market-behind-stall.png'});
+ await d.walkTo(2632,638);await d.walkTo(2632,702);await d.walkTo(2724,702);
+ order=await p.evaluate(()=>{const d=document.querySelector('[data-market-depth]');return[...d.children].indexOf(__game.player.g)>[...d.children].indexOf(d.querySelector('[data-stall=paper]'));});
+ assert(order,'traveller occludes the same stall from its front');
+ await center(702);await d.walkTo(2860,818);await visit(392,818);await d.action('Sora ile fincan yerleştir');await d.parts();await p.waitForSelector('.handwork.show',{state:'hidden'});
+ assert.equal(await p.evaluate(()=>__game.market.snapshot().clay),true);
+ await center(818);await d.walkTo(2860,340);await d.drive(0,-1);await p.waitForFunction(()=>!__game.inMarket);await d.drive(0,0);
+ assert(Math.abs(await p.evaluate(()=>__game.player.x)-657)<4);
+ await d.walkTo(657,356);await d.home();await d.walkTo(1410,356);
+ assert.equal(await p.locator('[data-market-postcard=home] path').count(),3);
+ await p.screenshot({path:'.local/v6-market-card-at-home.png'});
+ assert.deepEqual(d.errors,[]);await d.close();d=null;
+ console.log('PASS real touch alley entry, vertical travel, all four vendors, held tea, saved drawing, both sides of stalls and return home');
+})().catch(async e=>{if(d)await d.fail(e);else console.error(e);process.exitCode=1});

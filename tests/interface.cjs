@@ -47,40 +47,38 @@ async function advanceUntil(selector, maxSeconds = 40) {
       return;
     await step(1);
   }
-  throw Error("not reached " + selector);
+  throw Error('not reached '+selector);
 }
-async function settle() {
-  for (let i = 0; i < 40; i++) {
-    if (await d.page.evaluate(() => window.__game.story.canSave)) return;
-    await step(1);
-  }
-  throw Error("did not settle");
+async function settle(){
+ for(let i=0;i<40;i++){if(await d.page.evaluate(()=>window.__game.story.canSave))return;await step(1);}
+ throw Error('did not settle');
 }
-(async () => {
-  let p = await stage(undefined);
+(async()=>{
+ let p=await stage(undefined);
+     assert.equal(await p.locator('.arrival-card.show').count(),1);
+  assert((await p.locator('.arrival-card').textContent()).includes('Mürekkep Sokağı'));
+  assert.equal(await p.evaluate(()=>window.__game.story.mode),'intro');
+  await p.screenshot({path:'.local/v6-ui-day-and-place.png'});
+  await step(3);await p.waitForTimeout(500);
+  assert.equal(await p.evaluate(()=>window.__game.story.mode),'walk');
+  const hand=await p.locator('[data-gesture-hand]').boundingBox();
+  assert(hand.y>844*.73,'walking demonstration stays by the thumb');
+  await p.screenshot({path:'.local/v6-ui-walking-first.png'});
+  await d.drive(0,-1);await step(2.1);await d.drive(0,0);
   await step(1);
-  await p.locator(".street-guide").tap();
-  await step(0.5);
-  assert.equal(await p.locator("[data-companion]").count(), 1);
-  assert.equal(
-    await p.locator("[data-companion]").getAttribute("data-guiding"),
-    "true",
-  );
-  await step(1.3);
-  assert((await p.locator("svg.village").textContent()).includes("Ben Turna."));
-  await p.screenshot({ path: ".local/v5-ui-intro-response.png" });
-  await step(5);
-  assert.equal(await p.evaluate(() => window.__game.story.mode), "walk");
-  const hand = await p.locator("[data-gesture-hand]").boundingBox();
-  assert(hand.y > 844 * 0.73, "movement demonstration belongs by the thumb");
-  await p.screenshot({ path: ".local/v5-ui-low-gesture.png" });
-  assert.deepEqual(d.errors, []);
-  console.log(
-    "PASS crane introduces itself with a real flight/reply; lower thumb demonstration",
-  );
+  assert.equal(await p.locator('[data-companion]').count(),1);
+  assert.equal(await p.locator('[data-companion]').getAttribute('data-guiding'),'true');
+  assert((await p.locator('svg.village').textContent()).includes('Ben Turna.'));
+  await step(8);
+  assert.equal(await p.evaluate(()=>window.__game.story._dbg.q.guideMet),true);
+  await p.waitForTimeout(500);
+  await p.screenshot({path:'.local/v6-ui-turna-return.png'});
+  assert.deepEqual(d.errors,[]);
+  console.log('PASS day/place card → walking lesson → automatic single-crane introduction');
 
   p = await stage(base());
   await step(0.5);
+  await p.waitForTimeout(550);
   const initial = await p.locator("#act").boundingBox();
   assert(initial);
   for (const [x, y] of [
@@ -184,7 +182,7 @@ async function settle() {
   p = await stage(
     base(
       { day: 1, dayIntro: 1 },
-      { x: 1562, y: 356, inside: true },
+      { x: 1591, y: 356, inside: true },
       { step: 1, prep: 2 },
     ),
   );
@@ -212,10 +210,12 @@ async function settle() {
     await p.evaluate(() => window.__game.story._dbg.closeup._step),
     2,
   );
-  for (let i = 0; i < 3; i++) {
-    await p.touchscreen.tap(65, 680);
-    await step(0.8);
-  }
+  await d.hold([65,680],.45);
+  const partial=await p.evaluate(()=>window.__game.story._dbg.closeup._shapes[0]);
+  assert(partial>.25&&partial<.6);
+  await step(1);
+  assert.equal(await p.evaluate(()=>window.__game.story._dbg.closeup._shapes[0]),partial,'release stops rice shaping');
+  await d.hold([65,680],3.7);
   await step(1.5);
   assert.equal(
     await p.evaluate(() => window.__game.story._dbg.closeup._step),
@@ -231,23 +231,28 @@ async function settle() {
     await p.evaluate(() => window.__game.story._dbg.closeup.isOpen),
     true,
   );
+  await p.locator('[data-pattern=triangle]').tap();await step(1);
+  const foodBox=await p.locator('[data-nigiri="0"]').boundingBox();
+  assert(foodBox.width>55,'plating view keeps the nigiri large enough to arrange');
   for (let i = 0; i < 3; i++) {
     const pts = await p.evaluate((i) => {
       const c = window.__game.story._dbg.closeup;
-      return [c._pts.MOUND[i], c._pts.SLOT[i]].map(([x, y]) =>
+      return [c._plating.sources[i], c._plating.slots[i]].map(([x, y]) =>
         c._client([x, y - 10]),
       );
     }, i);
     await d.drag(...pts);
     await step(0.7);
   }
+  await p.locator(".cu-serve.show").tap();
   await step(4);
   assert.equal(
     await p.evaluate(() => window.__game.story._dbg.closeup.isOpen),
     false,
   );
+  assert.equal(await p.evaluate(()=>window.__game.home.plateLayout),'triangle');
   console.log(
-    "PASS swipe cutting and drag plating restored; taps cannot bypass either",
+    "PASS progressive cutting, hold/release shaping, close-view drag plating and retained triangular layout",
   );
 
   p = await stage(
@@ -258,8 +263,8 @@ async function settle() {
     ),
   );
   await step(0.3);
-  await d.action("Ye · 3 kaldı");
-  await step(0.6);
+  await d.action("Ye");
+  await step(1.15);
   assert.equal(
     await p.locator('[data-food-piece][data-eating="lift"]').count(),
     1,
@@ -273,8 +278,10 @@ async function settle() {
   });
   assert(gap < 3);
   await p.screenshot({ path: ".local/v5-ui-food-reaches-mouth.png" });
-  await step(0.9);
+  await step(1.3);
   assert.equal(await p.evaluate(() => window.__game.home.eaten), 1);
+  await step(7);
+  assert.equal(await p.evaluate(()=>window.__game.home.made),1);
   console.log(
     "PASS food is carried by the visible hand before a bite is taken",
   );

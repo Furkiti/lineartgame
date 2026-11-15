@@ -103,10 +103,11 @@ export function createPlayer(parent: Element, x: number, y: number) {
   const self = {
     g, x, y, dir: 1 as 1 | -1, speed: 0, running: 0, moving: 0,
     /** Where the figure may walk, in scene units. */
-    bounds: { x0: 14, x1: 946, y0: Y_MIN },
+    bounds: { x0: 14, x1: 946, y0: Y_MIN } as { x0: number; x1: number; y0?: number; y1?: number; depthSpeed?: number },
     /** smaller when farther in (walking up an alley) */
     scale: 1,
     sitting: 0,
+    recline: 0,
     /** Arm poses to blend toward, each 0…1: working at a counter, chopping with the right hand, carrying a tray. */
     pose: { work: 0, chop: 0, hold: 0 },
     /** When set, the body turns to this heading instead of following the stick. */
@@ -144,15 +145,15 @@ export function createPlayer(parent: Element, x: number, y: number) {
       }
       if (m > 0.12) {
         self.x += (jx / m) * speed * dt;
-        self.y += (jy / m) * speed * 0.6 * dt;
+        self.y += (jy / m) * speed * (self.bounds.depthSpeed ?? .6) * dt;
       }
       self.x = clamp(self.x, self.bounds.x0, self.bounds.x1);
-      self.y = clamp(self.y, self.bounds.y0 ?? Y_MIN, Y_MAX);
+      self.y = clamp(self.y, self.bounds.y0 ?? Y_MIN, self.bounds.y1 ?? Y_MAX);
       self.speed = speed; self.running = r * go; self.moving = go;
       const c = Math.cos(heading), s = Math.sin(heading);
       self.heading = heading; self.face = c;
       if (Math.abs(c) > 0.2) self.dir = c > 0 ? 1 : -1;
-      g.setAttribute('transform', `translate(${f(self.x)} ${f(self.y)}) scale(${f(FS * self.scale)}) translate(-40 -120)`);
+      g.setAttribute('transform', `translate(${f(self.x)} ${f(self.y)}) scale(${f(FS * self.scale)}) translate(-40 -120) rotate(${f(-90 * self.recline)} 40 120)`);
 
       // body frame → figure space. depth > 0 is toward you.
       const X = (u: number, w: number, v: number): Vec => [40 + u * c + w * s, v + (u * s - w * c) * PITCH];
@@ -188,7 +189,7 @@ export function createPlayer(parent: Element, x: number, y: number) {
       });
 
       // torso leans into the run; the jacket is a few rings, outlined from this angle
-      const lean = r * go * 5;
+      const lean = r * go * 5 + sit * (self.reach ? clamp((self.reach[0]-self.x)*c,0,10) : 0);
       const sh: Vec = [41 + lean, 42 + bob + r * 1.2];
       const su = sh[0] - 40;
       const hy = hip[1];
@@ -301,9 +302,9 @@ export function createPlayer(parent: Element, x: number, y: number) {
       [1, -1].forEach((side, i) => {
         // walking: the left arm swings against the left leg. working: both reach forward, the right one chops.
         let aim = lerp(-side * legSwing * amp, 34 + (side < 0 ? Math.sin(t * 15) * 16 * poseS.chop : 0), poseS.work);
-        aim = lerp(aim, 50, poseS.hold);
+        aim = lerp(aim, 22, poseS.hold);
         const a = armS[i].step(aim, dt) * RAD;
-        const eb = lerp(elb, lerp(1.0, 1.45, poseS.hold / Math.max(1e-3, busy)), busy);
+        const eb = lerp(elb, lerp(1.0, .85, poseS.hold / Math.max(1e-3, busy)), busy);
         const w = side * SHOULDER_W, sv = sh[1] + 2.5, su0 = su + 0.2;
         const eu = su0 + 15 * Math.sin(a), ev = sv + 15 * Math.cos(a);
         const hu = eu + 14 * Math.sin(a + eb), hv = ev + 14 * Math.cos(a + eb);

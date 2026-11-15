@@ -1,7 +1,7 @@
 export const DRAFT_KEY = 'ink-street-draft-v1';
 export const SAVE_KEY = 'ink-street-v2';
 let resetting = false;
-export type SavedGame = { version: 2; story: Record<string, any>; art: Record<string, any>; home: Record<string, any>; world: { x: number; y: number; inside: boolean; fair: boolean; tau: number } };
+export type SavedGame = { version: 2; story: Record<string, any>; art: Record<string, any>; home: Record<string, any>; market?: Record<string, any>; world: { market?:boolean; x: number; y: number; inside: boolean; fair: boolean; tau: number } };
 export function readSave(): SavedGame | null {
   try {
     const s = JSON.parse(localStorage.getItem(SAVE_KEY) ?? 'null');

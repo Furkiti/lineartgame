@@ -66,6 +66,7 @@ async function launchGame({
         { x: 135 + (x / mag) * 34, y: viewport.height * 0.84 + (y / mag) * 34 },
       ],
     });
+    if(debug) await page.waitForTimeout(45); // Chromium may coalesce touchmove until the next frame.
   }
   async function stroke(points, delay = 28) {
     await drive(0, 0);
@@ -84,6 +85,16 @@ async function launchGame({
       type: "touchEnd",
       touchPoints: [],
     });
+  }
+  async function hold(point,seconds){
+    await drive(0,0);
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:point[0],y:point[1]}]});
+    if(debug) await page.evaluate(n=>window.__step(n),seconds);else await page.waitForTimeout(seconds*1000);
+    await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
+  }
+  async function holdUntil(point,fn){
+    await drive(0,0);await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:point[0],y:point[1]}]});
+    try{await page.waitForFunction(fn,null,{timeout:20000});}finally{await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});}
   }
   async function drag(a, b, delay = 25) {
     await stroke(
@@ -115,7 +126,7 @@ async function launchGame({
       }
       await drive(
         s.mode === "walk" ? (s.x < x - 2 ? 1 : s.x > x + 2 ? -1 : 0) : 0,
-        s.mode === "walk" ? (s.y < y - 1 ? 1 : s.y > y + 1 ? -1 : 0) : 0,
+        s.mode === "walk" ? (inside !== undefined ? -1 : s.y < y - 1 ? 1 : s.y > y + 1 ? -1 : 0) : 0,
       );
       await page.waitForTimeout(75);
     }
@@ -145,7 +156,7 @@ async function launchGame({
   async function paperDraw() {
     await page.waitForSelector(".drawing-paper.show");
     await stroke(
-      await mapSVG(".paper-canvas", [
+      await mapSVG(".drawing-paper.show .paper-canvas", [
         [75, 145],
         [100, 98],
         [130, 135],
@@ -157,14 +168,14 @@ async function launchGame({
     );
     // A second independent stroke catches accidental per-stroke fitting/distortion.
     await stroke(
-      await mapSVG(".paper-canvas", [
+      await mapSVG(".drawing-paper.show .paper-canvas", [
         [111, 160],
         [125, 181],
         [144, 162],
       ]),
       70,
     );
-    await page.locator("[data-action=done]").tap();
+    await page.locator(".drawing-paper.show [data-action=done]").tap();
   }
   async function parts() {
     await page.waitForSelector(".handwork.show");
@@ -278,6 +289,8 @@ async function launchGame({
     drive,
     stroke,
     drag,
+    hold,
+    holdUntil,
     walkTo,
     mapSVG,
     paperDraw,

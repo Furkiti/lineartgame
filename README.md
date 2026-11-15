@@ -27,17 +27,29 @@ Beşinci günden sonra mahalle ve çizimlerin korunur. Eski süreli turna oyunu 
 
 Yere basıp sürükle: joystick parmağının altında çıkar, her yöne yürüyebilirsin.
 Kamera yürüdüğün yönün önünü yumuşakça açar. Etkileşim düğmesi sabit bir yerde durur.
-Kırmızı Turna’ya dokununca aynı turna sahnedeki hedefe uçup geri gelir; ilk dokunuşta
-kendini tanıtır. Hareket gösterimi elini basacağın alt alandadır.
+Başta gün ve Mürekkep Sokağı kartı görünür; ardından alt alanda hareket öğretilir.
+Birkaç adım sonra Turna kendiliğinden yanına gelip tanışır ve sol alta döner.
+Sonrasında ona dokununca aynı Turna sahnedeki hedefe uçup geri gelir.
 
-Evde bohçayı bırakmak, balığı tezgâha koymak, hazır tabağı almak ve masaya bırakmak
-yaklaşınca tamamlanır. Bohça yürümeyi kesmez. Dolabı açmak, hazırlamaya başlamak,
+Bohça eve girince kendiliğinden askıya süzülür; çıkarken sırta geri gelir ve yürümeyi
+kesmez. Balık tezgâhın ortasına gelince elden yavaşça bırakılır. Hazır tabağı almak
+ve masaya bırakmak yaklaşınca tamamlanır. Dolabı açmak, hazırlamaya başlamak,
 yemek yemek ve uyumak bilinçli eylemlerdir. Kapıya ilerlemek sürgüyü açar;
 geri çekilmek kapatır, eşiği geçmek dışarı çıkarır.
 
-Pirinç dairesel hareketlerle karıştırılır. Balık aşağı kaydırarak kesilir; pirinci
-şekillendirmek için boş alana dokunabilirsin. Nigiriyi tutup ahşap tabağa sürüklersin.
-Yemekte aynı parça tabaktan ele ve ağza gider; karakterler sofrada oturur.
+Pirinç yavaş dairelerle karıştırılır; küçük ocak alevi ve ince buhar hareket eder.
+Basılı tutmak bıçağı yavaşça indirir; aşağı sürüklemek de kesimi ilerletir. Pirinci
+şekillendirmek için boş alana basılı tut; bırakınca durur. Büyük yakın planda nigiriyi
+boş tabak izlerine sürükle; yan yana veya üçgen düzen seçip **Sofraya hazır** de.
+**Ye** / **Birlikte ye** tek seferde bütün öğünü başlatır. En yakın boş mindere
+oturursun; aynı tabaktan parçalar sırayla ele ve ağza gider. Son parça misafire uzatılır.
+**Uyu** ile futona uzanıp örtünü çekersin. Ayrı yürüme odası yerine açılır uyku nişi vardır.
+
+Çay evinin yanındaki **Pazar** yazılı başka bir ara sokak **Söğüt Pazarı**’na çıkar.
+Avluda aşağı doğru gezilir; aynı tezgâhın önünden ve arkasından geçilebilir. Nori ile
+basılı tutarak çay doldur, Momo ile dango diz, Sora ile fincanları yerleştir, Rei ile
+bir kart çiz. Kartın aynısı evinin duvarında ve defterinde kalır. Çıkış avlunun üstündedir.
+Tasarım kararları: [docs/tactile-home-and-market.md](docs/tactile-home-and-market.md).
 
 Klavye: ok tuşları / WASD; Shift ile hafif koşu; E veya Enter ile görünen etkileşim.
 
@@ -61,6 +73,8 @@ terminalde `npm run build` ve `npm run preview -- --port 4173` çalıştır.
 ```sh
 npm run test:play   # normal gün süresi ve gerçek dokunma girdileriyle beş tam gün
 npm run test:ui     # buton/kamera/öğretici, fiziksel hareketler, alternatif seçimler, yarım işi yükleme
+npm run test:market # dokunmayla ara sokak, dört satıcı, derinlik, kayıt ve eve dönüş
+npm run test:home   # basılı tutma, kapalı katman, ortak yemek, bohça ve yatak
 npm run test:edges  # yalnız yemek, kaligrafi, kedi, isteğe bağlı hayvan, büyük telefon/yatay ekran, reset
 ```
 

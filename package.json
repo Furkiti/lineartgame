@@ -11,7 +11,9 @@
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "test:play": "node tests/playthrough.cjs",
     "test:ui": "node tests/interface.cjs",
-    "test:edges": "node tests/edgecases.cjs"
+    "test:edges": "node tests/edgecases.cjs",
+    "test:market": "node tests/market.cjs",
+    "test:home": "node tests/home.cjs"
   },
   "devDependencies": {
     "playwright": "^1.62.1",

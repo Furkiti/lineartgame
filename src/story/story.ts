@@ -22,11 +22,12 @@ import { nextVisit, timeRate, type Visit } from './schedule.ts';
 import { type SavedGame } from './save.ts';
 import { createResident } from './resident.ts';
 import { createHandwork } from './handwork.ts';
+import { SEATS } from './dining.ts';
 import { DAYS, nextChapter, dayComplete, eveningTarget } from './journey.ts';
 import { sfx, haptic, wakeAudio, inkRing, approach, clamp01, easeOut, backOut } from './fx.ts';
 
 type Home = {
-  root: SVGGElement; newDay(): void; canEat: boolean; canCook: boolean; busy: boolean; takePlate(): void; windowOpen: boolean; decorateTable(paths: string[]): void;
+  root: SVGGElement; surfaces: SVGGElement; beginSleep(): void; guestSeat: number; diningGuest: { x: number; y: number; hand: Vec; head: Vec } | null; guestReach: Vec | null; offeredLast: boolean; newDay(): void; canEat: boolean; canCook: boolean; busy: boolean; made: number; setPlateDesign(pattern: 'row' | 'triangle', garnish?: boolean): void; takePlate(): void; windowOpen: boolean; decorateTable(paths: string[]): void;
   actors: SVGGElement; step: number; eaten: number; canSleep: boolean; prep: number; bagHung: boolean; catHome: boolean;
   setStep(n: number): void; prompt(pl: unknown): string | null;
 };
@@ -66,7 +67,7 @@ function sketchOf(lines: Vec[][], extra = ''): string {
 export function createStory(o: {
   svg: SVGSVGElement; card: HTMLElement; ui: UI; home: Home; player: Player; cat: Cat; saved?: SavedGame | null;
   layers: { front: Element; walkers: Element; glow: Element; stroke: Element };
-  env: { setTau(v: number): void; fade(v: number): void; isFaded(): boolean; isOpened(): boolean; tip(text: string | null, sticky?: boolean): void; banner(a: string, b: string): void };
+  env: { localModal?():boolean; localGuide?():boolean; extraEntries?():Entry[]; setTau(v: number): void; fade(v: number): void; isFaded(): boolean; isOpened(): boolean; tip(text: string | null, sticky?: boolean): void; banner(a: string, b: string): void };
 }) {
   const { svg, card, ui, home, player, cat, layers, env } = o;
   const paper = createPaper(card, () => { mode = 'walk'; cam = null; focusOn = null; script = null; card.classList.remove('brush-focus'); });
@@ -98,7 +99,7 @@ export function createStory(o: {
   let brushIdle = 0;
 
   const fox = createFox(layers.walkers, layers.glow);
-  let guest: Kenta | null = null, guestAte = 0, guestBiteT = -1, lastEating = false;
+  let guest: Kenta | null = null, guestAte = 0;
 
   // your home, from outside: a wooden nameplate, a mailbox, and a blank paper lantern
   const homeFront = el('g', {}, layers.front);
@@ -192,7 +193,7 @@ export function createStory(o: {
   const q = {
     kite: 'sad' as 'sad' | 'talked' | 'done', dinner: '' as '' | 'kenta' | 'alone', sushi: false, fox: false,
     lantern: false, toy: false, toyKind: 0, catHome: false, letter: false, fair: false, order: false, fresh: new Set<string>(), day: 1, slept: 0,
-    created: false, walkLearned: false, met: false, homeSeen: false, homeShown: false, visitedHome: false, kentaAway: false, nightHint: false, windowMoment: false, tableDecor: false,
+    created: false, walkLearned: false, guideMet: false, met: false, homeSeen: false, homeShown: false, visitedHome: false, kentaAway: false, nightHint: false, windowMoment: false, tableDecor: false,
     visit: 'none' as Visit, invitedDay: 0, missedNote: false, reminded: false,
     day2Seen: false, day3Seen: false, souvenir: '' as '' | 'cushion' | 'water', coins: 0,
     project: '' as '' | 'tea' | 'paws' | 'lanterns', projectPlan: '' as '' | 'tea' | 'paws', projectDay: 0, gathering: false, keepsake: false, tookMemento: false,
@@ -215,6 +216,7 @@ export function createStory(o: {
     q.projectPlan = q.project === 'tea' ? 'tea' : q.project ? 'paws' : '';
     q.arcVersion = 5;
   }
+  if (o.saved && o.saved.story.guideMet === undefined && q.walkLearned) q.guideMet = true;
   if (o.saved && q.kite === 'done') q.homeShown = true;
   let departing = false, nextHop = 0;
   let kiteLine: Vec[] = o.saved?.art.kite ?? [];
@@ -231,6 +233,7 @@ export function createStory(o: {
     drawing.forEach(l => el('path', { d: linePath(l, l === body), fill: l === body ? TOYS[q.toyKind]?.c ?? '#c8423a' : 'none', stroke: 'currentColor', 'stroke-width': .7 }, toyG));
   }
   const entries = (): Entry[] => [
+    ...(env.extraEntries?.() ?? []),
     { id: 'self', title: 'Benim çizgim', hint: '', sketch: sketchOf(art.portrait), done: art.portrait.length > 0 },
     { id: 'kite', title: 'Kenta’nın uçurtması', hint: 'Kiraz ağacının altında biri üzgün.', sketch: kiteLine.length ? sketchOf([[...kiteLine, kiteLine[0]]]) : SKETCH.kite, done: q.kite === 'done', fresh: q.fresh.has('kite') },
     { id: 'order', title: 'Çay evindeki çizgim', hint: 'Hana çay evinde.', sketch: art.sign.length ? art.sign.join(' ') : CHA.map(c => 'M' + c.pts.map(p => pt([8 + p[0] * .44, 8 + p[1] * .44])).join('L')).join(' '), transform: art.sign.length ? 'translate(8 8) scale(.44)' : '', solid: art.sign.length > 0, done: q.order, fresh: q.fresh.has('order') },
@@ -253,7 +256,7 @@ export function createStory(o: {
   const dots = [...defterBtn.querySelectorAll('.dots i')] as HTMLElement[];
   const refreshDots = () => { [q.kite === 'done', q.order, q.lantern, q.toy, q.fair, q.sushi, q.fox].forEach((d, i) => dots[i].classList.toggle('on', d)); };
   defterBtn.addEventListener('click', () => {
-    if (mode !== 'walk' || paper.isOpen || script) return;
+    if (mode !== 'walk' || paper.isOpen || script || env.localModal?.()) return;
     sfx.tap();
     notebook.show({ dayN: q.day, subtitle: 'bugün', entries: entries(), sentence: daySentence(false), button: 'Kapat', history: q.history, seal: sketchOf(art.seal) });
   });
@@ -322,10 +325,12 @@ export function createStory(o: {
   // ------------------------------------------------------------------ kitchen close-up
   const closeup = createCloseup(card, {
     onStep: (n) => home.setStep(n),
+    onDesign: d => home.setPlateDesign(d.pattern, d.garnish),
     onDone: () => { home.takePlate(); env.tip('Tabak elinde. Masaya doğru yürü.'); },
     onExit: () => { mode = 'walk'; cam = null; },
   });
 
+  closeup.restore(o.saved?.art.cooking);
   // ------------------------------------------------------------------ state & a tiny script runner
   let mode: 'intro' | 'walk' | 'cine' | 'brush' | 'cook' | 'sleep' | 'desk' | 'craft' = q.created ? 'walk' : 'intro';
   const syncControls = () => card.classList.toggle('controls-locked', mode !== 'walk');
@@ -366,28 +371,32 @@ export function createStory(o: {
   const toDoor = () => setObj(() => [DOOR_X, 300], () => ctx.inside, false);
 
   // ------------------------------------------------------------------ scenes
-  let guideAcknowledged = false;
+  const arrival = document.createElement('div'); arrival.className = 'arrival-card';
+  arrival.innerHTML = '<small>1. gün</small><h1>Mürekkep Sokağı</h1><i aria-hidden="true"></i>';
+  card.appendChild(arrival);
   function* intro(): Scene {
     mode = 'intro';
     yield () => env.isOpened();
-    yield .6;
+    arrival.classList.add('show');
+    yield 2.7;
+    arrival.classList.remove('show');
     q.created = true;
-    // Read at your own pace: the same crane that speaks is the one you touch.
-    guideCaption('Ben Turna. Bana dokun, tanışalım.');
-    help.classList.add('introducing');
-    yield () => guideAcknowledged;
-    help.classList.remove('introducing'); caption.hidden = true;
-    ui.guide(() => [player.x + 14, player.y - 40]);
-    yield .65;
-    yield* sayLine(ui.craneAt, 'Ben Turna. Kaybolursan bana dokun; birlikte yolunu buluruz.');
-    ui.guide(null);
     mode = 'walk'; cam = null;
-    guideCaption('Aşağıda bir yere basıp sürükle. Her yöne yürüyebilirsin.');
+    env.tip('Ekranın altına basıp sürükle. Her yöne yürüyebilirsin.', true);
     ui.showWalkingGesture();
-    const x = player.x, y = player.y;
-    yield () => Math.hypot(player.x - x, player.y - y) > 12;
-    q.walkLearned = true; ui.hideGesture(); guideCaption(null);
-    // No banner obscures the first look around the neighbourhood.
+    let last: Vec=[player.x,player.y], walked=0, movingFor=0;
+    yield () => {
+      walked+=Math.hypot(player.x-last[0],player.y-last[1]);last=[player.x,player.y];
+      if(player.moving>.2)movingFor+=ctx.dt;
+      // Loops count too; pushing against the pavement edge must not trap the first lesson.
+      return walked>26 || walked>8&&movingFor>1.6;
+    };
+    q.walkLearned = true; ui.hideGesture(); env.tip(null);
+    mode = 'intro'; ui.guide(() => [player.x + 16, player.y - 43]);
+    yield .75;
+    yield* sayLine(ui.craneAt, 'Ben Turna. Yön ararsan sol altta beni bulabilirsin.');
+    ui.guide(null); q.guideMet = true; mode = 'walk';
+    env.tip('Mahalleye bir bakalım. Fırçan da yanında.', false);
   }
 
   function* talk(): Scene {
@@ -649,7 +658,7 @@ export function createStory(o: {
     player.faceTo = -0.66;
     cam = fit(IX + 250, 286, IX + 334, 340, 4);
     yield 0.9;
-    closeup.open(Math.min(3, home.step));
+    closeup.open(Math.min(3, home.step), `${q.day}:${home.made}`);
     player.faceTo = null;
   }
 
@@ -676,15 +685,16 @@ export function createStory(o: {
   function* guestArrives(): Scene {
     mode = 'walk';
     guest = createKenta(home.actors, IX + 30, 356); guestAte = 0;
-    guest.want.sad = 0; guest.dir = 1; guest.speed = 34; guestBiteT = -1;
+    guest.want.sad = 0; guest.dir = 1; guest.speed = 34;
     guest.g.setAttribute('opacity', '0');
     kenta.g.style.display = 'none'; kite.draw(0, 0, 0, null); // the street Kenta has come over
     yield 0.6;
     guest.g.setAttribute('opacity', '1'); sfx.tap();
     ui.say(guestHead, home.step < 4 ? 'Geldim! Birlikte hazırlarız.' : 'Geldim! Sofraya oturuyorum.');
-    guest.walkTo(IX + 214, 353);
+    home.guestSeat = Math.abs(player.x - IX - SEATS[1]) < Math.abs(player.x - IX - SEATS[0]) ? 0 : 1;
+    guest.walkTo(IX + SEATS[home.guestSeat], 358);
     yield () => !guest || !guest.walking;
-    if (!guest) return; guest.dir = -1; guest.seated = true;
+    if (!guest) return; guest.dir = home.guestSeat === 0 ? 1 : -1; guest.seated = true;
     ui.say(guestHead, 'Itadakimasu!');
   }
 
@@ -702,14 +712,14 @@ export function createStory(o: {
   function* guestLeaves(): Scene {
     mode = 'cine'; env.tip(null); focusOn = () => guest ? [guest.x, guest.y] : [player.x + 30, player.y];
     cam = fit(IX + 140, 276, IX + 240, 372, 2.6);
-    yield* sayLine(guestHead, q.tableDecor ? 'Sofradaki deseni de sen mi çizdin? Benim uçurtmamla aynı evden çıktı!' : 'Uçurtmam da bu akşam da çok güzeldi. Teşekkür ederim.');
+    yield* sayLine(guestHead, home.offeredLast ? 'Son parçayı da bana verdin. Bu sofrayı unutmayacağım.' : q.tableDecor ? 'Sofradaki deseni de sen mi çizdin? Benim uçurtmamla aynı evden çıktı!' : 'Uçurtmam da bu akşam da çok güzeldi. Teşekkür ederim.');
     yield* sayLine(guestHead, 'Hana’nın çay tabelası solmuş. Yarın ona uçurtmayı göstereceğim.');
     q.supperTogether = true; q.visit = 'done'; q.sushi = true; mark('sushi');
     yield* chooseEvening();
     yield* sayLine(guestHead, 'Yarın sokakta görüşürüz. İyi geceler!');
     guest!.seated = false; guest!.speed = 36; guest!.walkTo(IX + 30, 356); afterSupper();
     yield () => !guest || !guest.walking;
-    guest?.g.remove(); guest = null;
+    guest?.g.remove(); guest = null; home.guestSeat = -1; home.diningGuest = null;
   }
 
   function* dinnerAlone(): Scene {
@@ -737,8 +747,9 @@ export function createStory(o: {
 
   function* sleep(): Scene {
     mode = 'sleep'; env.tip(null); obj = null; focusOn = null; ui.guide(null);
-    cam = fit(IX + 150, 250, IX + 230, 310, 3);
-    yield 1.8;
+    cam = fit(IX + 80, 290, IX + 172, 372, 3);
+    home.beginSleep();
+    yield 2.65;
     env.fade(1);
     yield () => env.isFaded();
     let closed = false;
@@ -749,7 +760,7 @@ export function createStory(o: {
     q.fresh.clear();
     yield () => closed;
     q.slept = q.day; q.day++;
-    home.newDay(); guest?.g.remove(); guest = null; ateSeen = guestAte = 0;
+    home.newDay(); player.x = IX + 116; player.y = 356; guest?.g.remove(); guest = null; ateSeen = guestAte = 0;
     q.sushi = false; q.reminded = false; q.nightHint = false; insideKey = '';
     if ((q.visit === 'planned' || q.visit === 'waiting') && q.invitedDay < q.day) q.visit = 'missed';
     if (q.visit === 'inside') q.visit = 'done';
@@ -759,7 +770,7 @@ export function createStory(o: {
     cam = null;
     env.fade(0);
     yield 1;
-    env.banner(`${q.day}. gün · ${DAYS[q.day - 1]?.title ?? 'Mahallenin bir sabahı'}`, DAYS[q.day - 1]?.morning ?? 'Sokak çizgilerini hatırlıyor.');
+    env.banner(`${q.day}. gün`, 'Mürekkep Sokağı');
     mode = 'walk';
   }
 
@@ -839,14 +850,8 @@ export function createStory(o: {
   }
   help.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); help.click(); } });
   help.addEventListener('click', () => {
-    if (mode === 'intro') {
-      if (guideAcknowledged) return;
-      guideAcknowledged = true; caption.hidden = true;
-      if (script && waitFn) { waitFn = null; advance(); }
-      syncControls();
-      sfx.paper(); return;
-    }
     if (mode !== 'walk' || notebook.isOpen || !ui.companionDocked) return;
+    if(env.localGuide?.()){sfx.paper();return;}
     if (obj && ctx.inside && !obj.inside) { ui.guide(() => [IX + 40, 322]); guideUntil = ctx.t + 5; guideCaption('Kapıdan çıkalım. Sonra sokaktaki hedefe bakarız.'); }
     else if (obj && obj.inside === ctx.inside && !ctx.fair) { ui.guide(obj.at); guideUntil = ctx.t + 5; guideCaption(ctx.inside && nextChapter(q) === 'supper' ? 'Mutfakta sıradaki yere bakalım.' : contextDirection()); }
     else guideCaption(contextDirection());
@@ -988,7 +993,7 @@ export function createStory(o: {
 
   const personal = el('g', { transform: `translate(${IX + 90} 278) scale(.14)`, 'pointer-events': 'none' }, home.root);
   personal.innerHTML = `<rect x="-3" y="-3" width="246" height="266" fill="#fdf7e8" stroke="#5d4e39" stroke-width="5"/>${art.portrait.map(l => `<path d="${linePath(l)}" fill="none" stroke="#443c30" stroke-width="3"/>`).join('')}`;
-  const thanks = el('g', { transform: `translate(${IX + 165} 329) rotate(-8)`, 'data-thanks-card': '' }, home.root);
+  const thanks = el('g', { transform: `translate(169 334) rotate(-8) scale(.65 .22)`, 'data-thanks-card': '' }, home.surfaces);
   thanks.innerHTML = `<path d="M-12 -9H12V7H-12Z" fill="#fff6df" stroke="currentColor" stroke-width=".5"/>${fitDrawing([kiteLine], 0, -1, 12).map(l => `<path d="${linePath(l, true)}" fill="none" stroke="#bd5143" stroke-width=".65"/>`).join('')}`;
   let thanksDrawn = kiteLine.length > 0;
   const doorSeal = el('path', { fill: 'none', stroke: '#b8483d', 'stroke-width': .7, transform: `translate(${PLATE[0]} ${PLATE[1]})` }, homeFront);
@@ -1086,20 +1091,21 @@ export function createStory(o: {
   }
 
   // ------------------------------------------------------------------ api
-  if (!q.created || !q.walkLearned) run(intro(), false);
+  if (!q.created || !q.walkLearned || !q.guideMet) run(intro(), false);
   else { mode = 'walk'; if (q.kite !== 'done') setObj(kentaHead, () => nearKenta(), false); }
   refreshDots();
   return {
-    get freeze() { return mode !== 'walk' || notebook.isOpen || paper.isOpen; },
+    get freeze() { return mode !== 'walk' || notebook.isOpen || paper.isOpen || !!env.localModal?.(); },
     get clockRate() {
-      const base = timeRate(mode, q.day, q.kite === 'done', notebook.isOpen || paper.isOpen || handwork.isOpen);
+      const base = timeRate(mode, q.day, q.kite === 'done', notebook.isOpen || paper.isOpen || handwork.isOpen || !!env.localModal?.());
       // Completed work lets the light drift into evening; there is no skip-time menu.
+      if(ctx?.fair) return base;
       const target = eveningTarget(q, home.step === 6, q.dinner === 'kenta' && ['planned', 'waiting'].includes(q.visit));
       return base === 1 && ctx && ctx.tau < target ? (q.day === 1 ? home.step === 6 && !q.sushi ? 18 : 12 : 24) : base;
     },
-    get canSnapshot() { return q.created && q.walkLearned && !notebook.isOpen && !home.busy && (mode === 'walk' && !script || handwork.isOpen || paper.isOpen); },
+    get canSnapshot() { return q.created && q.walkLearned && !notebook.isOpen && !home.busy && (mode === 'walk' && !script || handwork.isOpen || paper.isOpen || closeup.isOpen); },
     get canSave() { return q.created && q.walkLearned && mode === 'walk' && !script && !paper.isOpen && !home.busy; },
-    snapshot() { return { story: { ...q, fresh: [...q.fresh] }, art: { ...art, kite: kiteLine, lantern: lanternLines, toy: toy.line } }; },
+    snapshot() { return { story: { ...q, fresh: [...q.fresh] }, art: { ...art, kite: kiteLine, lantern: lanternLines, toy: toy.line, cooking: closeup.snapshot() } }; },
     get cam() { return cam; },
     get sitting() { return seated ? 1 : 0; },
     get facing() { if (!focusOn) return null; const p = focusOn(); return Math.atan2((p[1] - player.y) * .6, p[0] - player.x); },
@@ -1128,20 +1134,21 @@ export function createStory(o: {
     },
     /** the home asks the story to take over */
     onHome(what: 'cook' | 'sleep') { if (what === 'cook') run(cookIn()); else run(sleep()); },
+    onMemory(id:string){mark(id);},
     get canVisitFair() { return q.day >= 6 || q.gathering; },
     sortables(): { g: SVGGElement; y: number }[] { return ctx && !ctx.inside && !ctx.fair ? [kenta, hana, fox, ...neighbors].filter((c) => c.g.style.display !== 'none') : []; },
 
     update(c: Ctx) {
       ctx = c;
       const { t, dt, P, wind } = c;
-      card.classList.toggle('modal-open', paper.isOpen || notebook.isOpen || mode === 'desk' || mode === 'craft' || closeup.isOpen);
+      card.classList.toggle('modal-open', paper.isOpen || notebook.isOpen || mode === 'desk' || mode === 'craft' || closeup.isOpen || !!env.localModal?.());
       syncControls();
       if (guideUntil > 0 && t > guideUntil) { ui.guide(null); guideCaption(null); guideUntil = 0; }
-      ui.companionVisible(env.isOpened() && !paper.isOpen && !notebook.isOpen && !closeup.isOpen && mode !== 'desk' && mode !== 'craft' && mode !== 'brush');
-      help.hidden = !env.isOpened() || (!(mode === 'intro') && (mode !== 'walk' || !ui.companionDocked));
+      ui.companionVisible(env.isOpened() && !arrival.classList.contains('show') && !paper.isOpen && !notebook.isOpen && !closeup.isOpen && !env.localModal?.() && mode !== 'desk' && mode !== 'craft' && mode !== 'brush');
+      help.hidden = !env.isOpened() || !q.guideMet || mode !== 'walk' || !ui.companionDocked || !!env.localModal?.();
       if (mode === 'walk' && !script && q.walkLearned && !q.met && !c.inside && !c.fair && Math.abs(player.x - kenta.x) < 30) run(talk());
       refreshObjective();
-      if (q.day >= 2 && q.dayIntro < q.day && mode === 'walk' && !script) run(secondMorning());
+      if (q.day >= 2 && q.dayIntro < q.day && mode === 'walk' && !script && !c.fair) run(secondMorning());
       if (script) { if (waitFn) { if (waitFn()) { waitFn = null; advance(); } } else { waitT -= dt; if (waitT <= 0) advance(); } }
 
       if (!q.met && q.kite === 'sad' && Math.abs(player.x - kenta.x) < 145 && !c.inside) stuck.release();
@@ -1190,11 +1197,8 @@ export function createStory(o: {
       }
 
       if (guest) {
-        guest.faceTarget = player.x; guest.want.talk = mode === 'cine' ? 1 : 0;
-        const eating = home.busy && home.step === 6;
-        if (eating && !lastEating) guestBiteT = 0;
-        lastEating = eating;
-        if (guestBiteT >= 0) { guestBiteT += dt; guest.want.eat = Math.sin(Math.PI * clamp01(guestBiteT / 1.3)); guest.want.food = guestBiteT < .82 ? 1 : 0; if (guestBiteT > 1.3) { guestBiteT = -1; guest.want.eat = guest.want.food = 0; } }
+        guest.faceTarget = guest.seated || mode === 'cine' ? player.x : null; guest.want.talk = mode === 'cine' ? 1 : 0;
+        guest.reach = home.guestReach; guest.want.eat = guest.want.food = 0; home.diningGuest = guest;
         guest.draw(t, dt, P);
         if (player.g.parentNode === home.actors) {
           const front = guest.y > player.y;
@@ -1216,7 +1220,7 @@ export function createStory(o: {
       if (q.visit === 'planned' && c.tau >= .64 && !q.reminded && mode === 'walk') { q.reminded = true; think('Kenta bu akşam gelecekti.', 2.6); }
       if (q.visit === 'inside' && c.inside && !guest && !script && mode === 'walk') run(guestArrives());
       const couldEat = home.canEat;
-      home.canEat = q.invitedDay > q.day || (q.visit === 'inside' ? !!guest && !guest.walking && guest.x > IX + 200 : q.visit !== 'planned' && q.visit !== 'waiting');
+      home.canEat = q.invitedDay > q.day || (q.visit === 'inside' ? !!guest && !guest.walking && guest.seated : q.visit !== 'planned' && q.visit !== 'waiting');
       if (q.day === 1 && q.dinner !== 'kenta' && !q.sushi && home.step === 6 && c.tau < .69) home.canEat = false;
       if (!couldEat && home.canEat && home.step === 6) env.tip(guest ? 'Kenta geldi. Sofrada birlikte yiyebilirsiniz.' : 'Günün ışığı yumuşadı. Sofrana oturabilirsin.', true);
       if (guest && home.eaten > guestAte) { guestAte = home.eaten; ui.heart(guestHead()); sfx.pop(); }
@@ -1273,7 +1277,7 @@ export function createStory(o: {
           if (key !== insideKey) {
             const first = insideKey === '';
             insideKey = key;
-            const counter = () => setObj(() => [IX + 292, 300], () => Math.abs(player.x - (IX + 262)) < 24, true);
+            const counter = () => setObj(() => [IX + 292, 300], () => Math.abs(player.x - (IX + 291)) < 24, true);
             if (key === 'icebox') { setObj(() => [IX + 354, 286], () => Math.abs(player.x - (IX + 354)) < 18, true); env.tip('Balık dolapta. Yanına gidip dolabı aç.'); }
             else if (key === 'place') { counter(); env.tip('Tezgâha doğru yürü; balığı oraya bırakacaksın.'); }
             else if (key === 'cook') { counter(); env.tip('Tezgâhta suşi hazırla.'); }

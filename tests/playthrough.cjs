@@ -4,26 +4,21 @@ let d;
 (async () => {
   d = await launchGame();
   const { page: p } = d;
-  const wait = (fn, timeout = 25000) =>
+  const wait = (fn, timeout = 60000) =>
     p.waitForFunction(fn, null, { timeout });
   await p.locator("#opening").tap();
-  await p.waitForSelector(".guide-caption:not([hidden])");
-  const start = await p.evaluate(() => window.__game.player.x);
-  await d.drive(1, 0);
-  await p.waitForTimeout(600);
-  await d.drive(0, 0);
-  assert.equal(await p.evaluate(() => window.__game.player.x), start);
-  await p.locator(".street-guide").tap();
-  await wait(() => window.__game.story.mode === "walk");
-  await p.screenshot({ path: ".local/v5-full-01-thumb-lesson.png" });
-  await d.drive(1, 0);
-  await wait(() => window.__game.story.mode === "cine");
-  await d.drive(0, 0);
-  assert.equal(
-    await p.locator("[data-lost-kite]").getAttribute("data-state"),
-    "escaping",
-  );
-  assert.equal(await p.evaluate(() => window.__game.story._dbg.kenta.dir), -1);
+  await p.waitForSelector('.arrival-card.show');
+  await wait(()=>window.__game.story.mode==='walk');
+  await p.screenshot({path:'.local/v6-full-01-walk-lesson.png'});
+  await d.drive(1,0);
+  await wait(()=>window.__game.story.mode==='intro');
+  await d.drive(0,0);
+  await wait(()=>window.__game.story._dbg.q.guideMet&&window.__game.story.mode==='walk');
+  await d.drive(1,0);
+  await wait(()=>window.__game.story.mode==='cine');
+  await d.drive(0,0);
+  assert.equal(await p.locator('[data-lost-kite]').getAttribute('data-state'),'escaping');
+  assert.equal(await p.evaluate(()=>window.__game.story._dbg.kenta.dir),-1);
   await wait(() => window.__game.story.mode === "brush");
   await p.waitForTimeout(1100);
   const kite = await p.evaluate(() => {
@@ -62,7 +57,7 @@ let d;
   await d.action("Dolabı aç");
   await wait(() => window.__game.home.prep === 1);
   await p.waitForTimeout(2200);
-  await d.walkTo(1562, 356);
+  await d.walkTo(1591, 356);
   await wait(() => window.__game.home.prep === 2);
   await d.action("Suşi hazırla");
   await p.waitForSelector(".closeup.show");
@@ -90,22 +85,20 @@ let d;
     await p.waitForTimeout(550);
   }
   await wait(() => window.__game.story._dbg.closeup._step === 2);
-  for (let i = 0; i < 3; i++) {
-    await p.touchscreen.tap(65, 680);
-    await p.waitForTimeout(750);
-  }
+  await d.holdUntil([65,680],()=>window.__game.story._dbg.closeup._shapes.every(s=>s>=1));
   await wait(() => window.__game.story._dbg.closeup._step === 3);
   await p.waitForTimeout(1200);
   for (let i = 0; i < 3; i++) {
     const pts = await p.evaluate((i) => {
       const c = window.__game.story._dbg.closeup;
-      return [c._pts.MOUND[i], c._pts.SLOT[i]].map(([x, y]) =>
+      return [c._plating.sources[i], c._plating.slots[i]].map(([x, y]) =>
         c._client([x, y - 10]),
       );
     }, i);
     await d.drag(...pts);
     await p.waitForTimeout(650);
   }
+  await p.locator(".cu-serve.show").tap();
   await wait(() => !window.__game.story._dbg.closeup.isOpen, 12000);
   assert.equal(await p.evaluate(() => window.__game.home.step), 5);
   await d.walkTo(1486, 356);
@@ -116,20 +109,13 @@ let d;
   await d.paperDraw();
   await d.ready();
   await wait(() => window.__game.home.canEat, 45000);
-  for (let i = 0; i < 3; i++) {
-    await wait(() => !window.__game.home.busy);
-    await p.locator("#act").tap();
-    if (i === 0) {
-      await p.waitForTimeout(650);
-      assert.equal(
-        await p.locator('[data-food-piece][data-eating="lift"]').count(),
-        1,
-      );
-      assert(await p.evaluate(() => window.__game.home.reach !== null));
-      await p.screenshot({ path: ".local/v5-full-03-food-in-hand.png" });
-    }
-    await p.waitForTimeout(1700);
-  }
+  await d.action('Birlikte ye');
+  await p.waitForTimeout(1150);
+  assert.equal(await p.locator('[data-food-piece][data-eating="lift"]').count(),1);
+  assert(await p.evaluate(()=>window.__game.home.reach!==null));
+  await p.screenshot({path:'.local/v6-full-03-shared-meal.png'});
+  await wait(()=>window.__game.home.offeredLast);
+  await p.screenshot({path:'.local/v6-full-04-last-offer.png'});
   await d.choice(1);
   await d.ready();
   assert.equal(

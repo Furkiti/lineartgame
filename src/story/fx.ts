@@ -66,6 +66,8 @@ export const sfx = {
   paper() { noise({ dur: 0.18, gain: 0.05, freq: 1800, q: 0.5 }); },
   /** a knife through fish */
   slice() { noise({ dur: 0.16, gain: 0.09, freq: 4200, q: 1.4 }); tone(1800, { dur: 0.05, gain: 0.02 }); },
+  /** a restrained scrape while the held blade descends */
+  scrape(depth:number){ noise({dur:.12,gain:.018+depth*.014,freq:2400+depth*650,q:.9}); },
   /** soft press */
   press() { tone(220, { dur: 0.12, gain: 0.06, type: 'triangle' }); },
   /** a little pop for hearts */

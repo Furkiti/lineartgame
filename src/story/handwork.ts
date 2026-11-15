@@ -2,7 +2,7 @@
 import { el, f, PAPER, type Vec } from "../lib/ink.ts";
 import { approach, sfx, haptic } from "./fx.ts";
 
-type Kind = "shelter" | "tea" | "drawing" | "chime";
+type Kind = "shelter" | "tea" | "drawing" | "chime" | "dango" | "cups";
 type Part = {
   g: SVGGElement;
   at: Vec;
@@ -22,6 +22,7 @@ export function createHandwork(card: HTMLElement, onExit: () => void) {
     title = root.querySelector("h1")!,
     tip = root.querySelector("p")!,
     kicker = root.querySelector("small")!;
+  let kindLabel: Kind = "shelter";
   let parts: Part[] = [],
     drag: { id: number; pointer: number; offset: Vec } | null = null,
     active = false,
@@ -42,7 +43,9 @@ export function createHandwork(card: HTMLElement, onExit: () => void) {
       parent,
     );
   function art(g: Element, kind: Kind, i: number) {
-    if (kind === "shelter")
+    if(kind === "dango") el('circle',{cx:0,cy:0,r:16,fill:['#b6bf90','#f6ead6','#dba5a0'][i],stroke:'currentColor','stroke-width':1.3},g);
+    else if(kind === "cups") { path(g,'M-21 -14Q0-24 21-14L17 15Q0 24-17 15Z',['#c8d1be','#d5bb9b','#bbcbd3'][i]); path(g,'M-18 -13Q0-6 18-13','none',.7); }
+    else if (kind === "shelter")
       path(
         g,
         i < 2
@@ -103,6 +106,11 @@ export function createHandwork(card: HTMLElement, onExit: () => void) {
   function release(commit: boolean) {
     if (!drag) return;
     const part = parts[drag.id];
+    if(kindLabel==='dango'&&commit){
+      const free=[[185,178],[185,222],[185,266]].filter(t=>!parts.some(p=>p.placed&&p.target[1]===t[1]));
+      const target=free.sort((a,b)=>Math.hypot(a[0]-part.at[0],a[1]-part.at[1])-Math.hypot(b[0]-part.at[0],b[1]-part.at[1]))[0];
+      if(target) part.target=target as Vec;
+    }
     if (
       commit &&
       Math.hypot(part.at[0] - part.target[0], part.at[1] - part.target[1]) < 58
@@ -113,7 +121,7 @@ export function createHandwork(card: HTMLElement, onExit: () => void) {
       sfx.press();
       placed?.(parts.filter((p) => p.placed).map((p) => p.id));
       tip.textContent = parts.every((p) => p.placed)
-        ? "Oldu. Şimdi burada bir yerimiz var."
+        ? kindLabel === "dango" ? "Üç renk, bir çubuk. Oldu." : kindLabel === "cups" ? "Aralarına nefes alacak yer bıraktın." : "Oldu. Şimdi burada bir yerimiz var."
         : "Bir parça daha…";
       if (parts.every((p) => p.placed)) finishAt = 0.8;
     }
@@ -142,7 +150,7 @@ export function createHandwork(card: HTMLElement, onExit: () => void) {
         then: () => void;
       },
     ) {
-      active = true;
+      active = true; kindLabel = kind;
       drag = null;
       finishAt = -1;
       done = options.then;
@@ -166,6 +174,8 @@ export function createHandwork(card: HTMLElement, onExit: () => void) {
           : kind === "chime"
             ? "Çizdiğin kâğıdı ipin ucuna sürükle."
             : "Her komşuya bir tane uzat.";
+      if(kind==='dango') { path(svg,'M185 130V320','none',2); }
+      if(kind==='cups') path(svg,'M38 218H332V294H38Z','#dfc5a0',1);
       path(svg, "M12 352H358M12 365H358", "none", 1);
       if (kind === "shelter") {
         path(svg, "M20 345Q80 338 137 346M240 349q45-8 105-2", "none", 0.5);
@@ -176,7 +186,7 @@ export function createHandwork(card: HTMLElement, onExit: () => void) {
           "#d5e0d4",
           1.4,
         );
-      } else {
+      } else if(kind!=="dango"&&kind!=="cups") {
         [75, 185, 295].forEach((x, i) => {
           const g = el("g", { transform: `translate(${x} 244)` }, svg);
           path(
@@ -203,7 +213,7 @@ export function createHandwork(card: HTMLElement, onExit: () => void) {
       }
       path(svg, "M18 388H352V488H18Z", "#eadac0", 0.7);
       const targets: Vec[] =
-        kind === "chime"
+        kind === "dango" ? [[185,178],[185,222],[185,266]] : kind === "cups" ? [[88,256],[185,256],[282,256]] : kind === "chime"
           ? [[185, 287]]
           : kind === "shelter"
             ? [
@@ -230,6 +240,11 @@ export function createHandwork(card: HTMLElement, onExit: () => void) {
                 [185, 435],
                 [288, 435],
               ];
+      if(kind==='dango'||kind==='cups') {
+        kicker.textContent=kind==='dango'?'Söğüt Pazarı · Momo':'Söğüt Pazarı · Sora';
+        title.textContent=kind==='dango'?'Üç renk, bir çubuk.':'Fincanlara yer aç.';
+        tip.textContent=kind==='dango'?'Lokmaları çubuğa sürükle. Renklerin sırası senin.':'Fincanları soluk izlerine yerleştir.';
+      }
       targets.forEach((at, i) => {
         const g = el(
           "g",

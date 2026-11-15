@@ -13,6 +13,7 @@ import { createCat, createSparrows, createSwallows, createPetals, createSmoke } 
 import { createPlayer, Y_MIN } from './player.ts';
 import { buildHome } from './village/home.ts';
 import { buildFair } from './village/fair.ts';
+import { buildMarket, MX } from './village/market.ts';
 import { createCranes } from './cranes.ts';
 import { createJoystick } from './joystick.ts';
 import { createUI } from './story/ui.ts';
@@ -137,7 +138,7 @@ const DOOR = { x: 457, w: 12 }; // the gate at the end of the middle alley
 const ALLEY = { x: 457, mouth: 12, deep: 326, enter: 332, x0: 450, x1: 464 };
 let exitHold = 0;
 const STREET = { bounds: { x0: 14, x1: 946 }, view: { x0: 0, x1: W } };
-let inside = false, inFair = false, fade = 0, fadeTo = 0, pending: (() => void) | null = null, hintUntil = -1, tNow = 0, tipUntil = -1;
+let inside = false, inFair = false, inMarket = false, fade = 0, fadeTo = 0, pending: (() => void) | null = null, hintUntil = -1, tNow = 0, tipUntil = -1;
 const fadeN = $('#fade'), actN = $<HTMLButtonElement>('#act');
 const go = (fn: () => void) => { if (!pending) { pending = fn; fadeTo = 1; } };
 function enter() {
@@ -161,7 +162,29 @@ function exit() {
   player.x = DOOR.x; player.y = STORY ? ALLEY.enter + 4 : Y_MIN + 3; player.setHeading(Math.PI / 2);
   player.bounds = { ...STREET.bounds, y0: STORY ? ALLEY.deep : Y_MIN }; camSnap = true;
 }
-const atDoor = () => !inside && !inFair && Math.abs(player.x - DOOR.x) < DOOR.w && player.y < 362;
+const atDoor = () => !inside && !inFair && !inMarket && Math.abs(player.x - DOOR.x) < DOOR.w && player.y < 362;
+
+// A different side alley, past Hana's tea house, opens into the broad market courtyard.
+const MARKET_GATE=657;
+const marketAlley=layer(front,{'data-market-alley':''});
+marketAlley.innerHTML='<path d="M643 344V276H671V344M648 344V287H666V344" fill="#d9cbb6" stroke="currentColor" stroke-width=".65"/><path d="M650 287H664V319H650Z" fill="#75826a" stroke="currentColor" stroke-width=".5"/><path d="M652 330h10m-11 6h12m-12 6h12" stroke="currentColor" stroke-width=".6"/><text x="657" y="301" text-anchor="middle" font-size="7" fill="#fff8e8">市</text><path d="M640 307h34v11h-34Z" fill="#fff8e8" stroke="currentColor" stroke-width=".5"/><text x="657" y="315" text-anchor="middle" font-size="6">Pazar</text>';
+const market=buildMarket(svg,card,{saved:saved?.market,homeSurface:home.surfaces,
+  hint:(text,sticky)=>ui?.hint(()=>[player.x,player.y-54],text,sticky),
+  memory:id=>story?.onMemory(id),guide:at=>ui?.guide(at)});
+svg.insertBefore(market.root,home.root);
+function enterMarket(){
+  inMarket=true;[skyL,scene,glow,strokeL].forEach(n=>n.style.display='none');
+  market.root.style.display='';market.depth.appendChild(player.g);
+  player.x=market.spawn.x;player.y=market.spawn.y;player.setHeading(Math.PI/2);player.scale=1;
+  player.bounds={...market.bounds};camSnap=true;const first=market.onEnter();
+  if(first){bannerN.innerHTML='<b>Söğüt Pazarı</b><span>Mürekkep Sokağı’nın avlusu</span>';bannerN.classList.remove('show');void bannerN.offsetWidth;bannerN.classList.add('show');}
+}
+function exitMarket(){
+  inMarket=false;market.root.style.display='none';[skyL,scene,glow,strokeL].forEach(n=>n.style.display='');
+  walkers.appendChild(player.g);player.x=MARKET_GATE;player.y=338;player.scale=1;player.setHeading(Math.PI/2);
+  player.bounds={...STREET.bounds,y0:326};camSnap=true;ui?.guide(null);
+  ui?.hint(()=>[player.x,player.y-54],'Yine Mürekkep Sokağı’ndasın.');
+}
 
 // ------------------------------------------------------------------ the summer fair, past the west end of the street
 const fair = buildFair(svg, { glow: 'url(#v-warmglow)' });
@@ -190,13 +213,15 @@ function exitFair() {
   player.x = 40; player.y = 362; player.setHeading(0);
   player.bounds = { ...STREET.bounds, y0: Y_MIN }; camSnap = true;
 }
-const atFairGate = () => !inside && player.x < 44 && (!STORY || !!story?.canVisitFair || inFair);
+const atFairGate = () => !inside && !inMarket && player.x < 44 && (!STORY || !!story?.canVisitFair || inFair);
 function act() {
   if (pending || winN.classList.contains('show')) return;
+  if(inMarket){if(!story?.freeze)market.act(player);return;}
   if (story?.act()) return;
   if (!inside && atFairGate()) { go(inFair ? exitFair : enterFair); return; }
   if (!inside) { if (atDoor() && !STORY) go(enter); return; }
   const r = home.act(player);
+  if(home.mealActive)ui?.hint(()=>[player.x,player.y-54],null);
   if (r === 'exit') go(exit);
   else if ((r === 'cook' || r === 'sleep') && story) story.onHome(r);
 }
@@ -251,6 +276,9 @@ const story = STORY && ui ? createStory({
   layers: { front, walkers, glow, stroke: strokeL },
   env: {
     setTau: (v) => { tau = v; },
+    localModal:()=>inMarket&&market.busy,
+    localGuide:()=>{if(!inMarket)return false;market.help(player);return true;},
+    extraEntries:()=>market.entries(),
     fade: (v) => { fadeTo = v; },
     isFaded: () => fade >= 1,
     isOpened: () => openingReady,
@@ -277,14 +305,14 @@ else openingN.addEventListener('click', () => {
 });
 
 if (saved) {
-  if (saved.world.inside) enter(); else if (saved.world.fair) enterFair();
+  if (saved.world.inside) enter(); else if (saved.world.market) enterMarket(); else if (saved.world.fair) enterFair();
   player.x = saved.world.x; player.y = saved.world.y; tau = saved.world.tau;
 }
 let saveAt = 0, warnedSave = false, restarting = false;
 function saveGame() {
   if (restarting || !story?.canSnapshot || home.busy) return;
   const snapshot = story.snapshot();
-  const ok = writeSave({ version: 2, ...snapshot, home: home.snapshot(), world: { x: player.x, y: player.y, inside, fair: inFair, tau } });
+  const ok = writeSave({ version: 2, ...snapshot, home: home.snapshot(), market:market.snapshot(), world: { x: player.x, y: player.y, inside, fair: inFair, market:inMarket, tau } });
   if (!ok && !warnedSave) { warnedSave = true; hintN.textContent = 'Bu tarayıcı ilerlemeni kaydedemiyor.'; hintN.classList.remove('gone'); }
 }
 addEventListener('pagehide', saveGame);
@@ -330,7 +358,7 @@ run((t, dt) => {
   if (story && t > saveAt && !document.hidden) { saveAt = t + 2; saveGame(); }
   P = palette(tau);
   // restyle only when the colour actually changes: every change restyles every line
-  const inkS = rgb(P.ink), paperS = rgb(P.paper);
+  const inkS = inMarket ? '#34322c' : rgb(P.ink), paperS = inMarket ? '#faf6ec' : rgb(P.paper);
   if (inkS !== lastInk) { lastInk = inkS; svg.style.color = inkS; card.style.setProperty('--ink', inkS); }
   if (paperS !== lastPaper) { lastPaper = paperS; svg.style.setProperty('--paper', paperS); card.style.setProperty('--paper', paperS); }
 
@@ -346,22 +374,31 @@ run((t, dt) => {
   if (lock) { const e = 1 - Math.exp(-dt * 10); player.x = lerp(player.x, lock.x, e); player.y = lerp(player.y, lock.y, e); }
   player.faceTo = lock ? lock.heading : story?.facing ?? null;
   player.reach = inside ? home.reach : null;
+  player.recline = inside ? home.recline : 0;
   player.sitting = Math.max(inside ? home.sitting : 0, story?.sitting ?? 0);
   player.pose = inside ? home.pose : { work: 0, chop: 0, hold: 0 };
   // the alley: past its mouth you can walk in, growing smaller, the street falling behind
   let alleyDepth = 0;
-  if (STORY && !inside && !inFair) {
-    const deep = player.y < Y_MIN - 0.5, inMouth = Math.abs(player.x - ALLEY.x) < ALLEY.mouth;
-    player.bounds = deep ? { x0: ALLEY.x0, x1: ALLEY.x1, y0: ALLEY.deep } : { ...STREET.bounds, y0: inMouth ? ALLEY.deep : Y_MIN };
-    alleyDepth = clamp((Y_MIN - player.y) / (Y_MIN - ALLEY.deep), 0, 1);
-    player.scale = 1 - alleyDepth * 0.3;
-    if (player.y < ALLEY.enter && j.y < -0.2 && !pending && !story?.freeze) go(enter);
+  if(inMarket){
+    player.bounds={...market.bounds};
+    if(Math.abs(player.x-market.spawn.x)<23&&player.y<327&&j.y<-.2&&!pending&&!story?.freeze)go(exitMarket);
+  }
+  if (STORY && !inside && !inFair && !inMarket) {
+    const gate=player.y<Y_MIN-.5&&Math.abs(player.x-MARKET_GATE)<30?MARKET_GATE:Math.abs(player.x-MARKET_GATE)<14?MARKET_GATE:ALLEY.x;
+    const deep=player.y<Y_MIN-.5,inMouth=Math.abs(player.x-gate)<ALLEY.mouth;
+    player.bounds=deep?{x0:gate-7,x1:gate+7,y0:ALLEY.deep}:{...STREET.bounds,y0:inMouth?ALLEY.deep:Y_MIN};
+    alleyDepth=clamp((Y_MIN-player.y)/(Y_MIN-ALLEY.deep),0,1);
+    player.scale=1-alleyDepth*.3;
+    if(player.y<ALLEY.enter&&j.y<-.2&&!pending&&!story?.freeze){
+      if(gate===MARKET_GATE)go(enterMarket);else go(enter);
+    }
   } else player.scale = 1;
   // The genkan has real depth: approach, part the shoji, then cross its threshold.
   if (STORY && inside) {
     const aligned = Math.abs(player.x - (home.spawn.x - 4)) < 19;
-    const canLeave = !home.carrying && home.prep !== 1 && !home.busy && !story?.freeze;
+    const canLeave = home.canExit && !story?.freeze;
     const doorDepth = aligned ? clamp((365 - player.y) / 19, 0, 1) : 0;
+    home.exitIntent = canLeave && aligned && player.y < 359 && (j.y < -.12 || home.exitIntent && j.y <= .12 && player.y < 360);
     home.doorTarget = canLeave ? doorDepth : 0;
     home.doorContact = canLeave && doorDepth > .12 && doorDepth < .96;
     player.bounds = { ...home.bounds, y0: canLeave && aligned ? 326 : Y_MIN };
@@ -369,7 +406,7 @@ run((t, dt) => {
     if (home.doorContact) player.faceTo = -Math.PI / 2;
     player.scale = 1 - doorDepth * .12;
     player.g.style.opacity = String(1 - clamp((345 - player.y) / 18, 0, .55));
-    exitHold = canLeave && aligned && player.y < 345 && j.y < -.2 && home.doorOpen > .82 ? exitHold + dt : 0;
+    exitHold = canLeave && home.readyToLeave && aligned && player.y < 345 && home.exitIntent && j.y <= .12 && home.doorOpen > .82 ? exitHold + dt : 0;
     if (exitHold > .06 && !pending) { exitHold = 0; go(exit); }
   }
   player.update(t, dt, j.x, j.y, P, wind);
@@ -377,26 +414,27 @@ run((t, dt) => {
   if (STORY && tipUntil > 0 && t > tipUntil) { hintN.classList.add('gone'); tipUntil = -1; }
   if (inside) home.draw(t, dt, P, player);
   if (inFair) fair.draw(t, dt, P, wind, player);
+  if(inMarket)market.draw(t,dt,player);
 
   // fade through the paper when going in or out
   fade = clamp(fade + (fadeTo ? dt : -dt) * 3.4, 0, 1);
   if (fade >= 1 && pending) { pending(); pending = null; fadeTo = 0; }
   fadeN.style.opacity = f(fade);
-  story?.update({ t, dt, P, wind, tau, inside, fair: inFair, base: { w: vb.w, h: vb.h }, stickActive: stick.active, stickTouched: stick.touched });
-  const sp = story ? story.prompt() : null;
+  story?.update({ t, dt, P, wind, tau, inside, fair: inFair || inMarket, base: { w: vb.w, h: vb.h }, stickActive: stick.active, stickTouched: stick.touched });
+  const sp = inMarket ? (story?.freeze ? '' : market.prompt(player)) : story ? story.prompt() : null;
   const hp = inside ? home.prompt(player) : null;
   const label = pending || home.busy || sp === '' ? null : sp ?? (inside ? (STORY && hp === 'Dışarı çık' ? null : hp) : atFairGate() ? (inFair ? 'Sokağa dön' : 'Panayıra git') : atDoor() && !winN.classList.contains('show') && !STORY ? 'İçeri gir' : null);
   if (label && actN.textContent !== label) actN.textContent = label;
   actN.classList.toggle('show', !!label);
 
   // camera: eases after you and leads a little where you face, or glides to what the story frames
-  const view = inside ? home.view : inFair ? fair.view : STREET.view;
+  const view = inside ? home.view : inMarket ? market.view : inFair ? fair.view : STREET.view;
   // inside, the room is framed a little closer than the street
   let follow: { cx: number; cy: number; z: number };
   if (OLD_CAM) follow = inside && STORY ? { cx: player.x + player.face * vb.w * 0.05, cy: 324, z: Math.min(1.5, vb.h / 200) } : { cx: player.x + player.face * vb.w * 0.08, cy: H - vb.h / 2, z: 1 };
   else {
     const portrait = cardW / Math.max(1, cardH) < 0.8;
-    const z = inside ? Math.min(1.5, vb.h / 200) : portrait ? 1.08 : 1;
+    const z = inside ? Math.min(1.5, vb.h / 200) : inMarket ? .94 : portrait ? 1.08 : 1;
     const w = vb.w / z, h = vb.h / z;
     // Follow the traveller, and open the view in the actual input direction.
     // A large dead zone used to cancel most of that lead during a walk.
@@ -406,13 +444,13 @@ run((t, dt) => {
     idleT = moving ? 0 : idleT + dt;
     const mag = Math.hypot(j.x, j.y) || 1;
     const aimX = moving ? j.x / mag * w * (inside ? .16 : .25) : idleT > 1 ? 0 : camLead;
-    const aimY = moving ? j.y / mag * Math.min(12, h * .035) : 0;
+    const aimY = moving ? j.y / mag * (inMarket ? h * .14 : Math.min(12, h * .035)) : 0;
     camLead = approach(camLead, aimX, moving ? 2.8 : .7, dt);
     camLeadY = approach(camLeadY, aimY, 2.2, dt);
     // feet two-thirds of the way down the frame (street level ~366, floor ~362)
-    const ratio = portrait || inside ? 0.67 : 0.76;
-    follow = { cx: camAnchor + camLead, cy: (inside ? 362 : 366) - (ratio - 0.5) * h + camLeadY, z };
-    if (alleyDepth > 0) follow = { cx: lerp(follow.cx, ALLEY.x, alleyDepth), cy: lerp(follow.cy, 300, alleyDepth * 0.8), z: z * (1 + alleyDepth * 0.7) };
+    const ratio = inMarket ? .56 : portrait || inside ? 0.67 : 0.76;
+    follow = { cx: camAnchor + camLead, cy: (inside ? 362 : inMarket ? player.y : 366) - (ratio - 0.5) * h + camLeadY, z };
+    if (alleyDepth > 0) follow = { cx: lerp(follow.cx, Math.abs(player.x-MARKET_GATE)<30?MARKET_GATE:ALLEY.x, alleyDepth), cy: lerp(follow.cy, 300, alleyDepth * 0.8), z: z * (1 + alleyDepth * 0.7) };
   }
   const want = story?.cam ?? follow;
   if (camSnap) { cam = { ...want }; camSnap = false; }
@@ -424,7 +462,7 @@ run((t, dt) => {
   const cw = vb.w / cam.z, ch = vb.h / cam.z;
   let cx0 = cam.cx - cw / 2;
   cx0 = view.x1 - view.x0 <= cw ? (view.x0 + view.x1 - cw) / 2 : clamp(cx0, view.x0, view.x1 - cw);
-  const cy0 = clamp(cam.cy - ch / 2, 0, (OLD_CAM || inside ? H : H + 90) - ch);
+  const cy0 = clamp(cam.cy - ch / 2, 0, (inMarket ? 1050 : OLD_CAM || inside ? H : H + 90) - ch);
   vb.x = cx0;
   if (VBCAM) svg.setAttribute('viewBox', `${f(cx0)} ${f(cy0)} ${f(cw)} ${f(ch)}`);
   else svg.style.transform = `translate3d(${f(-vb.x * k)}px, ${f(-vb.y * k)}px, 0)`;
@@ -505,7 +543,7 @@ run((t, dt) => {
   timeN.textContent = fmt(elapsed);
 
   // depth: whoever is nearer the canal is drawn in front
-  const all = [...people, ...(inside || inFair ? [] : [player]), ...(story ? story.sortables() : []), ...cranes.list.map((c) => ({ g: c.g, y: c.y + 0.5 }))];
+  const all = [...people, ...(inside || inFair || inMarket ? [] : [player]), ...(story ? story.sortables() : []), ...cranes.list.map((c) => ({ g: c.g, y: c.y + 0.5 }))];
   all.sort((a, b) => a.y - b.y);
   let prev: Element | null = null;
   for (const p of all) { if (p.g.previousElementSibling !== prev) walkers.insertBefore(p.g, prev ? prev.nextSibling : walkers.firstChild); prev = p.g; }
@@ -514,4 +552,5 @@ run((t, dt) => {
   clock.innerHTML = `<b>${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}</b> <span>${period(hrs)}</span>`;
 });
 
-(window as unknown as { __game: unknown }).__game = { player, cranes, people, home, act, enter, exit, story, ui, save: saveGame, get camera() { return { ...cam, lead: camLead, leadY: camLeadY }; }, get tau() { return tau; }, setTau: (v) => { tau = v; }, get score() { return score; }, get inside() { return inside; }, get inFair() { return inFair; }, enterFair, exitFair };
+(window as unknown as { __game: unknown }).__game = { player, cranes, people, home, act, enter, exit, story, ui, save: saveGame, get camera() { return { ...cam, lead: camLead, leadY: camLeadY }; }, get tau() { return tau; }, setTau: (v) => { tau = v; },
+ get score() { return score; }, get inside() { return inside; }, get inFair() { return inFair; }, get inMarket(){return inMarket;}, market, enterMarket, exitMarket, enterFair, exitFair };

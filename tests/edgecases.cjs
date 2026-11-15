@@ -76,10 +76,8 @@ async function settle() {
   assert(
     !(await p.locator("[data-world-hint]").textContent()).includes("Kenta"),
   );
-  for (let i = 0; i < 3; i++) {
-    await p.locator("#act").tap();
-    await step(2.7);
-  }
+  await d.action("Ye");
+  await step(9);
   await until(".choices.show");
   await d.choice(1);
   await settle();

@@ -56,6 +56,7 @@ export function createResident(
     "path",
     {
       d: "M-4 -43Q-7-51 0-50Q4-50 4-46L1-47Q-1-46-4-43Z",
+      "data-hair":"",
       fill: "#3c3838",
       stroke: "currentColor",
       "stroke-width": 0.6,
@@ -65,6 +66,7 @@ export function createResident(
   el(
     "circle",
     {
+      "data-bun":"",
       cx: -4.5,
       cy: -49,
       r: 2.7,

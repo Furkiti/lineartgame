@@ -30,7 +30,7 @@ export function createKenta(parent: Element, x: number, y: number) {
 
   let seat = 0, eat = 0, phase = 0, go = 0, hopT = -1, look = 0, sad = 0, raise = 0, tx = x, ty = y, wave = 0, tNow = 0;
   const self = {
-    g, x, y, dir: -1 as number, speed: 26, seated: false, faceTarget: null as number | null,
+    g, x, y, dir: -1 as number, speed: 26, seated: false, reach: null as Vec | null, faceTarget: null as number | null,
     /** 0…1 targets the body eases toward */
     want: { look: 0, sad: 0, raise: 0, wave: 0, talk: 0, eat: 0, food: 0 },
     hand: [x, y - 30] as Vec,
@@ -72,7 +72,8 @@ export function createKenta(parent: Element, x: number, y: number) {
       });
       g.appendChild(legs[pose.front].L.g); g.insertBefore(legs[pose.front].L.g, shorts);
       // shoulders slump when sad, chest opens when looking up
-      const sh: Vec = [43 + go * 2 - sad * 1.4 - look * 1.2, 74 + sad * 2 + breathe + seat * 14];
+      const lean=seat*(self.reach?Math.max(0,Math.min(16,(self.reach[0]-self.x)*self.dir*1.2)):0);
+      const sh: Vec = [43 + go * 2 - sad * 1.4 - look * 1.2 + lean, 74 + sad * 2 + breathe + seat * 2];
       shorts.setAttribute('d', `M34.6 ${f(hip[1] - 4)} L46 ${f(hip[1] - 4)} L47 ${f(hip[1] + 4)} L41 ${f(hip[1] + 4.6)} L40 ${f(hip[1] + 1)} L37.6 ${f(hip[1] + 4.6)} L33.8 ${f(hip[1] + 3.6)}Z`);
       shirt.setAttribute('d', `M35 ${f(hip[1] - 3.6)} Q34.2 ${f(sh[1] + 6)} ${f(sh[0] - 6)} ${f(sh[1])} Q${f(sh[0])} ${f(sh[1] - 2.6)} ${f(sh[0] + 3)} ${f(sh[1] + 1)} Q47.4 ${f(sh[1] + 10)} 46.4 ${f(hip[1] - 3.6)}Z`);
       // head: down when sad, back when looking up
@@ -97,6 +98,7 @@ export function createKenta(parent: Element, x: number, y: number) {
       const ne: Vec = [nsh[0] + Math.sin(aa) * 8, nsh[1] + Math.cos(aa) * 8];
       const hn: Vec = [ne[0] + Math.sin(aa - 0.3 * (1 - up)) * 8, ne[1] + Math.cos(aa - 0.3 * (1 - up)) * 8];
       hn[0] = lerp(hn[0], hc[0] + 4, eat); hn[1] = lerp(hn[1], hc[1] + 4, eat);
+      if (self.reach) { hn[0] = 40 + (self.reach[0] - self.x) / (self.dir * FS); hn[1] = 120 + (self.reach[1] - self.y) / FS; ne[0] = (nsh[0] + hn[0]) / 2 + 4; ne[1] = Math.max(nsh[1] + 8, (nsh[1] + hn[1]) / 2 + 5); }
       arm.draw([nsh, ne, hn], [0.2, 0.4]);
       bite.setAttribute('transform', `translate(${f(hn[0])} ${f(hn[1])})`); bite.setAttribute('opacity', f(self.want.food));
       self.hand = [self.x + self.dir * FS * (hn[0] - 40), self.y - hop * FS + FS * (hn[1] - 120)];
