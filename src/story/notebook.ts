@@ -3,7 +3,7 @@
 // any time, and by itself when you go to sleep.
 import { sfx } from './fx.ts';
 
-export type Entry = { id: string; title: string; hint: string; sketch: string; done: boolean; fresh?: boolean };
+export type Entry = { id: string; title: string; hint: string; sketch: string; done: boolean; fresh?: boolean; transform?: string; solid?: boolean };
 
 export function createNotebook(card: HTMLElement) {
   const wrap = document.createElement('div');
@@ -31,7 +31,7 @@ export function createNotebook(card: HTMLElement) {
       day.textContent = `${pageDay}. gün`; sub.textContent = index === pages.length - 1 ? subtitle : 'hatıra';
       cells.innerHTML = entries.map((e, i) => `
         <div class="cell ${e.done ? 'done' : 'todo'} ${e.fresh ? 'fresh' : ''}" style="--i:${i}">
-          <svg viewBox="0 0 60 60"><path pathLength="1" d="${e.sketch}"/></svg>
+          <svg viewBox="0 0 60 60"><path pathLength="1" d="${e.sketch}" transform="${e.transform ?? ''}" style="${e.solid ? 'fill:currentColor;stroke-width:.4' : ''}"/></svg>
           ${e.done ? `<i class="seal">${seal ? `<svg viewBox="0 0 60 60"><path d="${seal}" style="stroke:#fff4dc;stroke-width:3;fill:none"/></svg>` : '済'}</i>` : ''}
           <b>${e.title}</b><small>${e.done ? '' : e.hint}</small>
         </div>`).join('');

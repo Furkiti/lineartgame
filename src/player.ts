@@ -98,7 +98,7 @@ export function createPlayer(parent: Element, x: number, y: number) {
   const bend = spring(40, 9);
   const sway = spring(26, 3.2), hatS = spring(30, 4.5);
 
-  let phase = 0, go = 0, r = 0, lastBob = 0, heading = 0, lastOrder = '';
+  let phase = 0, go = 0, r = 0, sit = 0, lastBob = 0, heading = 0, lastOrder = '';
   const poseS = { work: 0, chop: 0, hold: 0 };
   const self = {
     g, x, y, dir: 1 as 1 | -1, speed: 0, running: 0, moving: 0,
@@ -106,12 +106,16 @@ export function createPlayer(parent: Element, x: number, y: number) {
     bounds: { x0: 14, x1: 946, y0: Y_MIN },
     /** smaller when farther in (walking up an alley) */
     scale: 1,
+    sitting: 0,
     /** Arm poses to blend toward, each 0…1: working at a counter, chopping with the right hand, carrying a tray. */
     pose: { work: 0, chop: 0, hold: 0 },
     /** When set, the body turns to this heading instead of following the stick. */
     faceTo: null as number | null,
     /** Both hands, averaged, in scene units (for things carried). */
     hands: [x, y - 30] as Vec,
+    rightHand: [x, y - 30] as Vec,
+    mouth: [x, y - 43] as Vec,
+    reach: null as Vec | null,
     /** the red bundle on the back (hang it up at home) */
     carryBundle: true,
     identity: { head: '', mark: '', body: '' },
@@ -158,12 +162,13 @@ export function createPlayer(parent: Element, x: number, y: number) {
       // legs: the same phase drives both gaits, so blending them keeps the feet in step
       const pw = walk.pose(phase, go), pr = run.pose(phase, go);
       const L = (a: Vec, b: Vec): Vec => [lerp(a[0], b[0], r), lerp(a[1], b[1], r)];
-      const hip = L(pw.hip, pr.hip);
+      sit += (self.sitting - sit) * (1 - Math.exp(-dt * 6));
+      const hip = L(pw.hip, pr.hip); hip[1] += sit * 18;
       const breathe = go < 0.5 ? Math.sin(t * 2.1) * 0.35 * (1 - go * 2) : 0;
       const bob = hip[1] - pw.hip[1] + pw.bob + breathe;
       const feet = [0, 1].map((i) => {
         const a = L(pw.feet[i].ankle, pr.feet[i].ankle), k = L(pw.feet[i].knee, pr.feet[i].knee);
-        return { a, k, pitch: lerp(pw.feet[i].pitch, pr.feet[i].pitch, r) };
+        return { a: [lerp(a[0], 56 + i * 2, sit), a[1]] as Vec, k: [lerp(k[0], 60 + i * 2, sit), lerp(k[1], 109, sit)] as Vec, pitch: lerp(pw.feet[i].pitch, pr.feet[i].pitch, r) };
       });
       const legDepth: number[] = [];
       feet.forEach((fo, i) => {
@@ -253,6 +258,7 @@ export function createPlayer(parent: Element, x: number, y: number) {
 
       // head and the kasa, which nods a little behind the bounce
       const hc = X(su + 1.8 + lean * 0.3, 0, sh[1] - 9.6);
+      self.mouth = [self.x + (hc[0] - 40 + c * 3.1) * FS * self.scale, self.y + (hc[1] - 117) * FS * self.scale];
       head.setAttribute('cx', f(hc[0])); head.setAttribute('cy', f(hc[1]));
       identityHead.setAttribute('d', self.identity.head);
       identityHead.setAttribute('transform', `translate(${f(hc[0])} ${f(hc[1])})`);
@@ -301,9 +307,16 @@ export function createPlayer(parent: Element, x: number, y: number) {
         const w = side * SHOULDER_W, sv = sh[1] + 2.5, su0 = su + 0.2;
         const eu = su0 + 15 * Math.sin(a), ev = sv + 15 * Math.cos(a);
         const hu = eu + 14 * Math.sin(a + eb), hv = ev + 14 * Math.cos(a + eb);
-        const hand = X(hu, lerp(w + side * 1.2, side * 2.6, poseS.hold), hv);
+        let hand = X(hu, lerp(w + side * 1.2, side * 2.6, poseS.hold), hv);
+        let elbow = X(eu, lerp(w + side * .7, side * 4.6, poseS.hold), ev);
+        if (i === 1 && self.reach) {
+          hand = [40 + (self.reach[0] - self.x) / (FS * self.scale), 120 + (self.reach[1] - self.y) / (FS * self.scale)];
+          const shoulder = X(su0, w, sv);
+          elbow = [lerp(shoulder[0], hand[0], .45) - c * 6, Math.max(shoulder[1] + 12, lerp(shoulder[1], hand[1], .5) + 8)];
+        }
+        if (i === 1) self.rightHand = [self.x + (hand[0] - 40) * FS * self.scale, self.y + (hand[1] - 120) * FS * self.scale];
         handSum[0] += hand[0] / 2; handSum[1] += hand[1] / 2;
-        arms[i].draw([X(su0, w, sv), X(eu, lerp(w + side * 0.7, side * 4.6, poseS.hold), ev), hand], [0.2, 0.4]);
+        arms[i].draw([X(su0, w, sv), elbow, hand], [0.2, 0.4]);
         hands[i].setAttribute('cx', f(hand[0])); hands[i].setAttribute('cy', f(hand[1]));
         armDepth[i] = depth(su0, w);
       });

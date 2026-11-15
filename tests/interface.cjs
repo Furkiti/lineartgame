@@ -1,239 +1,478 @@
 const assert = require("node:assert/strict");
-const fs = require("node:fs");
-const { chromium } = require("playwright");
-let activeBrowser;
-fs.mkdirSync(".local", { recursive: true });
-(async () => {
-  const b = await chromium.launch({
-    executablePath:
-      process.env.CHROMIUM_PATH ||
-      (fs.existsSync("/usr/bin/chromium") ? "/usr/bin/chromium" : undefined),
-    headless: true,
-    args: ["--no-sandbox"],
-  });
-  activeBrowser = b;
-  const ctx = await b.newContext({
-    viewport: { width: 390, height: 844 },
-    hasTouch: true,
-  });
-  const p = await ctx.newPage();
-  const errors = [];
-  p.on("pageerror", (e) => errors.push(e.message));
-  p.setDefaultTimeout(15000);
-  const base = process.env.PLAYTEST_URL || "http://127.0.0.1:4173/";
-  const url = new URL(base);
-  url.search = "?debug&opening";
-  await p.goto(url.href);
-  await p.locator("#opening").tap();
-  await p.waitForTimeout(350);
-  assert.equal(
-    await p
-      .locator("#opening em")
-      .evaluate((el) => getComputedStyle(el).visibility),
-    "hidden",
-  );
-  assert.equal(await p.locator(".guide-caption:not([hidden])").count(), 0);
-  await p.waitForTimeout(1800);
-  const step = (n) => p.evaluate((n) => window.__step(n), n);
-  await step(1);
-  await p.locator(".street-guide").tap();
-  await step(0.3);
-  assert.equal(await p.locator(".guide-caption:not([hidden])").count(), 0);
-  assert.equal(await p.locator("[data-companion]").count(), 1);
-  assert.equal(await p.locator(".street-guide svg").count(), 0);
-  const cdp = await ctx.newCDPSession(p);
-  await cdp.send("Input.dispatchTouchEvent", {
-    type: "touchStart",
-    touchPoints: [{ x: 140, y: 700 }],
-  });
-  await cdp.send("Input.dispatchTouchEvent", {
-    type: "touchMove",
-    touchPoints: [{ x: 171, y: 680 }],
-  });
+const { launchGame } = require("./driver.cjs");
+const base = (story = {}, world = {}, home = {}, art = {}) => ({
+  version: 2,
+  story: {
+    arcVersion: 5,
+    day: 2,
+    dayIntro: 2,
+    created: true,
+    walkLearned: true,
+    met: true,
+    kite: "done",
+    dinner: "alone",
+    visit: "done",
+    homeShown: true,
+    visitedHome: true,
+    fresh: [],
+    ...story,
+  },
+  world: { x: 600, y: 356, inside: false, fair: false, tau: 0.36, ...world },
+  home: { bagHung: true, ...home },
+  art: {
+    kite: [
+      [0, -20],
+      [20, 0],
+      [0, 20],
+      [-20, 0],
+      [0, -20],
+    ],
+    ...art,
+  },
+});
+let d;
+async function stage(seed) {
+  if (d) await d.close();
+  d = await launchGame({ seed, debug: true, record: false });
   await step(0.25);
-  const hint = await p.locator("[data-world-hint]").boundingBox(),
-    joy = await p.locator("#stick").boundingBox();
-  assert(hint.y + hint.height < joy.y - 15);
-  await p.screenshot({ path: ".local/ui-01-reading-and-stick.png" });
-  await step(0.8);
-  await cdp.send("Input.dispatchTouchEvent", {
-    type: "touchEnd",
-    touchPoints: [],
-  });
-  await step(0.3);
-  assert.equal(
-    await p.evaluate(() => window.__game.story._dbg.q.walkLearned),
-    true,
-  );
-  // Request a route: one node leaves its dock and the same node returns.
-  await p.evaluate(
-    () => (window.__crane = document.querySelector("[data-companion]")),
-  );
-  await p.locator(".street-guide").tap();
+  return d.page;
+}
+const step = (n) => d.page.evaluate((n) => window.__step(n), n);
+async function advanceUntil(selector, maxSeconds = 40) {
+  for (let i = 0; i < maxSeconds; i++) {
+    if (
+      (await d.page.locator(selector).count()) &&
+      (await d.page.locator(selector).first().isVisible())
+    )
+      return;
+    await step(1);
+  }
+  throw Error("not reached " + selector);
+}
+async function settle() {
+  for (let i = 0; i < 40; i++) {
+    if (await d.page.evaluate(() => window.__game.story.canSave)) return;
+    await step(1);
+  }
+  throw Error("did not settle");
+}
+(async () => {
+  let p = await stage(undefined);
   await step(1);
+  await p.locator(".street-guide").tap();
+  await step(0.5);
+  assert.equal(await p.locator("[data-companion]").count(), 1);
   assert.equal(
     await p.locator("[data-companion]").getAttribute("data-guiding"),
     "true",
   );
-  assert.equal(await p.locator(".guide-caption:not([hidden])").count(), 0);
-  await p.screenshot({ path: ".local/ui-02-single-crane-flight.png" });
-  await step(8);
-  assert.equal(
-    await p.locator("[data-companion]").getAttribute("data-docked"),
-    "true",
+  await step(1.3);
+  assert((await p.locator("svg.village").textContent()).includes("Ben Turna."));
+  await p.screenshot({ path: ".local/v5-ui-intro-response.png" });
+  await step(5);
+  assert.equal(await p.evaluate(() => window.__game.story.mode), "walk");
+  const hand = await p.locator("[data-gesture-hand]").boundingBox();
+  assert(hand.y > 844 * 0.73, "movement demonstration belongs by the thumb");
+  await p.screenshot({ path: ".local/v5-ui-low-gesture.png" });
+  assert.deepEqual(d.errors, []);
+  console.log(
+    "PASS crane introduces itself with a real flight/reply; lower thumb demonstration",
   );
-  assert.equal(
-    await p.evaluate(
-      () => window.__crane === document.querySelector("[data-companion]"),
-    ),
-    true,
-  );
-  // Observe every action label during the automatic encounter.
-  await p.evaluate(() => {
-    window.__labels = [];
-    new MutationObserver(() =>
-      window.__labels.push(document.querySelector("#act").textContent),
-    ).observe(document.querySelector("#act"), {
-      childList: true,
-      subtree: true,
-    });
+
+  p = await stage(base());
+  await step(0.5);
+  const initial = await p.locator("#act").boundingBox();
+  assert(initial);
+  for (const [x, y] of [
+    [80, 690],
+    [300, 720],
+    [185, 700],
+  ]) {
+    await p.touchscreen.tap(x, y);
+    await step(0.2);
+    const box = await p.locator("#act").boundingBox();
+    assert(
+      Math.abs(box.y - initial.y) < 0.5,
+      "touching the scene must not move the action",
+    );
+  }
+  await p.screenshot({ path: ".local/v5-ui-fixed-action.png" });
+  console.log("PASS action stays at the same coordinates across scene touches");
+
+  p = await stage(base({ order: true }, { x: 550 }));
+  await d.drive(1, 0);
+  await step(2);
+  let ahead = await p.evaluate(() => {
+    const s = document.querySelector("svg.village"),
+      p = s.createSVGPoint();
+    p.x = window.__game.player.x;
+    p.y = window.__game.player.y;
+    return p.matrixTransform(s.getScreenCTM()).x;
   });
-  await p.keyboard.down("d");
-  await step(14);
-  await p.keyboard.up("d");
-  await step(10);
-  assert.equal(await p.evaluate(() => window.__game.story.mode), "brush");
-  assert.equal(
-    await p.evaluate(() =>
-      window.__labels.some((t) => /Kenta ile konuş/.test(t)),
-    ),
-    false,
+  assert(ahead < 390 * 0.45, "right walk must show more street ahead");
+  const before = await p.evaluate(() => window.__game.camera.cx);
+  await d.drive(-1, 0);
+  await step(0.05);
+  assert(
+    Math.abs((await p.evaluate(() => window.__game.camera.cx)) - before) < 4,
+    "camera may not snap on reversal",
   );
+  await step(2);
+  ahead = await p.evaluate(() => {
+    const s = document.querySelector("svg.village"),
+      p = s.createSVGPoint();
+    p.x = window.__game.player.x;
+    p.y = window.__game.player.y;
+    return p.matrixTransform(s.getScreenCTM()).x;
+  });
+  assert(ahead > 390 * 0.55, "left walk must reveal the left side");
+  await d.drive(0, 0);
+  await p.screenshot({ path: ".local/v5-ui-camera-left.png" });
+  console.log(
+    "PASS directional lead, smooth reversal and both travel directions",
+  );
+
+  p = await stage(
+    base({ day: 1, dayIntro: 1, kite: "sad", met: false }, { x: 170 }),
+  );
+  await step(0.4);
+  assert.equal(
+    await p.locator("[data-lost-kite]").getAttribute("data-state"),
+    "escaping",
+  );
+  const t1 = await p.locator("[data-lost-kite]").getAttribute("transform");
+  await step(1.5);
+  const t2 = await p.locator("[data-lost-kite]").getAttribute("transform");
+  assert.notEqual(t1, t2);
+  assert.equal(await p.evaluate(() => window.__game.story._dbg.q.met), false);
+  await d.drive(1, 0);
+  for (
+    let i = 0;
+    i < 10 && (await p.evaluate(() => window.__game.story.mode === "walk"));
+    i++
+  )
+    await step(0.5);
+  await d.drive(0, 0);
+  await step(1);
+  assert.equal(await p.evaluate(() => window.__game.story._dbg.kenta.dir), -1);
+  await step(13);
+  assert.equal(await p.evaluate(() => window.__game.story.mode), "brush");
   assert(
     Number(await p.locator("[data-lost-kite]").getAttribute("opacity")) < 0.03,
   );
   assert(
     (await p.locator("[data-drawing-template]").getAttribute("d")).length > 20,
   );
-  await p.screenshot({ path: ".local/ui-03-kite-template.png" });
-  // Isolated physical interactions use an established journey; no modal is bypassed by the player test.
-  const fixture = {
-    version: 2,
-    story: {
-      day: 1,
-      created: true,
-      walkLearned: true,
-      met: true,
-      kite: "done",
-      dinner: "kenta",
-      visit: "planned",
-      invitedDay: 1,
-      fresh: [],
-    },
-    art: {},
-    home: {},
-    world: { x: 457, y: 368, inside: false, fair: false, tau: 0.4 },
-  };
-  await p.evaluate(
-    (s) => localStorage.setItem("ink-street-v2", JSON.stringify(s)),
-    fixture,
+  await p.screenshot({ path: ".local/v5-ui-kite-template.png" });
+  console.log(
+    "PASS old kite already escaping before dialogue; Kenta faces us; template remains",
   );
-  url.search = "?debug";
-  await p.goto(url.href);
-  await step(0.1);
-  await p.evaluate(() => {
-    const g = window.__game;
-    g.enter();
-    g.player.x = 1355;
-    g.player.y = 356;
-  });
-  await p.keyboard.down("d");
-  await step(0.15);
-  const a = await p.evaluate(() => window.__game.player.x);
-  assert.equal(await p.evaluate(() => window.__game.home.busy), true);
-  await step(0.55);
-  const z = await p.evaluate(() => window.__game.player.x);
-  assert(z > a + 4, "hanging the bundle must not stop movement");
-  await step(0.6);
-  await p.keyboard.up("d");
-  assert.equal(await p.evaluate(() => window.__game.home.bagHung), true);
-  await p.evaluate(() => {
-    const g = window.__game;
-    g.player.x = 1600;
-    g.player.y = 370;
-  });
-  await step(0.1);
-  await cdp.send("Input.dispatchTouchEvent", {
-    type: "touchStart",
-    touchPoints: [{ x: 195, y: 650 }],
-  });
-  await p.evaluate(() => {
-    const g = window.__game;
-    g.player.x = 1654;
-    g.player.y = 356;
-  });
-  await step(0.1);
-  assert.equal(await p.locator("#act").innerText(), "Dolabı aç");
-  const action = await p.locator("#act").boundingBox();
+
+  p = await stage(
+    base({ day: 1, dayIntro: 1, visitedHome: false }, { x: 450 }),
+  );
+  await step(1);
+  await step(12);
   assert(
-    action.y + action.height < 600,
-    "action must be clear of the held thumb",
+    (await p.locator("[data-world-hint]").textContent()).includes("taşlı"),
   );
-  await cdp.send("Input.dispatchTouchEvent", {
-    type: "touchEnd",
-    touchPoints: [],
-  });
-  await step(0.2);
-  await p.screenshot({ path: ".local/ui-04-action-above-thumb.png" });
-  await p.evaluate(() => {
-    window.__game.player.x = 1340;
-    window.__game.player.y = 352;
-  });
-  await p.keyboard.down("w");
-  for (let i = 0; i < 30 && (await p.evaluate(() => window.__game.inside)); i++)
-    await step(0.05);
-  await p.keyboard.up("w");
-  assert.equal(
-    await p.evaluate(() => window.__game.inside),
-    false,
-    "crossing the doorway should exit without walking to the far wall",
+  assert(
+    Number(await p.locator("[data-world-hint]").getAttribute("opacity")) > 0.9,
+  );
+  console.log("PASS stone-alley explanation remains readable until entering");
+
+  p = await stage(
+    base(
+      { day: 1, dayIntro: 1 },
+      { x: 1562, y: 356, inside: true },
+      { step: 1, prep: 2 },
+    ),
   );
   await p.evaluate(() => window.__game.story._dbg.closeup.open(1));
-  await step(1);
+  await step(1.3);
+  await p.touchscreen.tap(65, 680);
+  await step(0.8);
+  assert.equal(
+    await p.evaluate(() => window.__game.story._dbg.closeup._step),
+    1,
+    "a tap is not a slicing gesture",
+  );
   for (let i = 0; i < 3; i++) {
-    await p.touchscreen.tap(70, 680);
-    await step(0.65);
+    const pts = await p.evaluate(() =>
+      [
+        [258, 150],
+        [258, 247],
+      ].map((q) => window.__game.story._dbg.closeup._client(q)),
+    );
+    await d.drag(...pts, 25);
+    await step(0.8);
   }
-  await step(1);
+  await step(1.2);
   assert.equal(
     await p.evaluate(() => window.__game.story._dbg.closeup._step),
     2,
   );
   for (let i = 0; i < 3; i++) {
-    await p.touchscreen.tap(70, 680);
-    await step(0.75);
+    await p.touchscreen.tap(65, 680);
+    await step(0.8);
   }
-  await step(1);
+  await step(1.5);
   assert.equal(
     await p.evaluate(() => window.__game.story._dbg.closeup._step),
     3,
   );
+  await p.touchscreen.tap(65, 680);
+  await step(0.8);
+  assert.equal(
+    await p.evaluate(() => window.__game.story._dbg.closeup._step),
+    3,
+  );
+  assert.equal(
+    await p.evaluate(() => window.__game.story._dbg.closeup.isOpen),
+    true,
+  );
   for (let i = 0; i < 3; i++) {
-    await p.touchscreen.tap(70, 680);
-    await step(0.75);
+    const pts = await p.evaluate((i) => {
+      const c = window.__game.story._dbg.closeup;
+      return [c._pts.MOUND[i], c._pts.SLOT[i]].map(([x, y]) =>
+        c._client([x, y - 10]),
+      );
+    }, i);
+    await d.drag(...pts);
+    await step(0.7);
   }
   await step(4);
   assert.equal(
     await p.evaluate(() => window.__game.story._dbg.closeup.isOpen),
     false,
   );
-  assert.deepEqual(errors, []);
   console.log(
-    "PASS: opening overlap, world text/thumb separation, single crane continuity/return, automatic Kenta, departing kite/template, unblocked bag, action placement, short doorway, touch-only kitchen",
+    "PASS swipe cutting and drag plating restored; taps cannot bypass either",
   );
-  await b.close();
+
+  p = await stage(
+    base(
+      { day: 1, dayIntro: 1 },
+      { x: 1486, y: 356, inside: true, tau: 0.71 },
+      { step: 6, prep: 2, eaten: 0 },
+    ),
+  );
+  await step(0.3);
+  await d.action("Ye · 3 kaldı");
+  await step(0.6);
+  assert.equal(
+    await p.locator('[data-food-piece][data-eating="lift"]').count(),
+    1,
+  );
+  let gap = await p.evaluate(() => {
+    const g = window.__game;
+    return Math.hypot(
+      g.home.reach[0] - g.player.rightHand[0],
+      g.home.reach[1] - g.player.rightHand[1],
+    );
+  });
+  assert(gap < 3);
+  await p.screenshot({ path: ".local/v5-ui-food-reaches-mouth.png" });
+  await step(0.9);
+  assert.equal(await p.evaluate(() => window.__game.home.eaten), 1);
+  console.log(
+    "PASS food is carried by the visible hand before a bite is taken",
+  );
+
+  p = await stage(
+    base(
+      { day: 3, dayIntro: 3, order: true, souvenir: "cushion", giftUsed: true },
+      { x: 730 },
+    ),
+  );
+  await step(17);
+  await d.action("Kuru bir köşe kuralım");
+  await advanceUntil(".choices.show");
+  await d.choice(0);
+  await advanceUntil(".handwork.show");
+  const tau = await p.evaluate(() => window.__game.tau);
+  await step(5);
+  assert.equal(
+    await p.evaluate(() => window.__game.tau),
+    tau,
+    "building must not run an appointment clock",
+  );
+  const [a, b] = await d.mapSVG(".handwork svg", [
+    [60, 437],
+    [96, 292],
+  ]);
+  await d.drag(a, b);
+  await step(0.7);
+  await p.reload();
+  await step(0.5);
+  assert.equal(await p.evaluate(() => window.__game.story._dbg.q.project), "");
+  assert.deepEqual(
+    await p.evaluate(() => window.__game.story._dbg.q.shelterParts),
+    [0],
+  );
+  await d.action("Köşeye devam et");
+  await advanceUntil(".handwork.show");
+  await d.parts();
+  await advanceUntil(".drawing-paper.show");
+  await d.stroke(
+    await d.mapSVG(".paper-canvas", [
+      [75, 145],
+      [120, 90],
+      [170, 150],
+      [75, 145],
+    ]),
+    70,
+  );
+  await d.stroke(
+    await d.mapSVG(".paper-canvas", [
+      [105, 160],
+      [125, 180],
+      [145, 160],
+    ]),
+    70,
+  );
+  const draft = await p.locator(".paper-ink").getAttribute("d");
+  await p.reload();
+  await step(0.5);
+  await d.action("Köşeye devam et");
+  await advanceUntil(".drawing-paper.show");
+  assert.equal(
+    await p.locator(".paper-ink").getAttribute("d"),
+    draft,
+    "reopening the task must restore the exact unfinished drawing",
+  );
+  await p.locator("[data-action=done]").tap();
+  await settle();
+  assert.equal(
+    await p.evaluate(() => window.__game.story._dbg.q.project),
+    "tea",
+  );
+  assert.equal(await p.locator("[data-awning-art] path").count(), 2);
+  await p.screenshot({ path: ".local/v5-ui-tea-shelter.png" });
+  console.log(
+    "PASS alternate tea shelter, cancellation/reload/resume, full multi-stroke drawing",
+  );
+
+  p = await stage(
+    base(
+      {
+        day: 4,
+        dayIntro: 4,
+        order: true,
+        project: "tea",
+        souvenir: "cushion",
+        giftUsed: true,
+      },
+      { x: 730 },
+      {},
+      {
+        project: [
+          [
+            [80, 90],
+            [140, 150],
+            [170, 100],
+          ],
+        ],
+      },
+    ),
+  );
+  await step(17);
+  await d.action("Çanın dilini yenile");
+  await advanceUntil(".choices.show");
+  await d.choice(0);
+  await advanceUntil(".drawing-paper.show");
+  await d.paperDraw();
+  await advanceUntil(".handwork.show");
+  await p.locator(".handwork-back").tap();
+  await settle();
+  await p.reload();
+  await step(0.6);
+  assert.equal(
+    await p.evaluate(() => window.__game.story._dbg.q.chimePlace),
+    "home",
+  );
+  await d.action("Çanın dilini yenile");
+  await advanceUntil(".handwork.show");
+  await d.parts();
+  await step(1);
+  await settle();
+  assert.equal(
+    await p.locator("[data-wind-chime]").getAttribute("data-place"),
+    "home",
+  );
+  assert.equal(await p.locator("[data-chime-art] path").count(), 2);
+  assert.deepEqual(d.errors, []);
+  console.log(
+    "PASS own-door chime choice, saved drawing and tying after a cancelled task",
+  );
+
+  p = await stage(
+    base(
+      {
+        day: 5,
+        dayIntro: 5,
+        order: true,
+        project: "tea",
+        chime: true,
+        chimePlace: "home",
+        souvenir: "cushion",
+        giftUsed: true,
+      },
+      { x: 730 },
+      {},
+      {
+        project: [
+          [
+            [80, 90],
+            [140, 150],
+            [170, 100],
+          ],
+        ],
+        chime: [
+          [
+            [90, 100],
+            [150, 130],
+          ],
+        ],
+      },
+    ),
+  );
+  await step(17);
+  await d.action("Buluşmayı hazırlayalım");
+  await advanceUntil(".choices.show");
+  await d.choice(1);
+  await advanceUntil(".drawing-paper.show");
+  await d.paperDraw();
+  await settle();
+  await d.action("Fırçaları uzat");
+  await advanceUntil(".handwork.show");
+  await d.parts();
+  await step(1);
+  await advanceUntil(".choices.show");
+  await d.choice(1);
+  await settle();
+  assert.equal(
+    await p.evaluate(() => window.__game.story._dbg.q.festivalMode),
+    "drawing",
+  );
+  assert.equal(
+    await p.evaluate(() => window.__game.story._dbg.q.tookMemento),
+    false,
+  );
+  assert.equal(
+    await p.evaluate(() => window.__game.story._dbg.q.gathering),
+    true,
+  );
+  assert.deepEqual(d.errors, []);
+  await p.screenshot({ path: ".local/v5-ui-drawing-gathering.png" });
+  console.log(
+    "PASS alternate drawing gathering and a memory kept in the shared corner",
+  );
+  await d.close();
+  d = null;
+  console.log("PASS all interface regressions and alternate chapter branches");
 })().catch(async (e) => {
-  console.error(e);
-  await activeBrowser?.close();
+  if (d) await d.fail(e);
+  else console.error(e);
   process.exitCode = 1;
 });

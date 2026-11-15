@@ -17,7 +17,7 @@ const lerpPose = (a, b, t) => { const o = {}; for (const k in a) o[k] = Array.is
 const SEQ: Array<[string, number]> = [['sit', 0.7], ['yawn', 0.9], ['sit', 0.4], ['stretch', 1.5], ['sit', 0.6], ['groom', 0.45], ['sit', 0.35], ['groom', 0.45], ['sit', 0.35], ['groom', 0.45], ['sit', 0.9], ['sleep', 1.1]];
 
 export function createCat(parent, glow, { x, y }) {
-  const g = el('g', { style: 'cursor:pointer' }, parent);
+  const g = el('g', { style: 'cursor:pointer', 'data-cat': 'street' }, parent);
   const tailOut = el('path', { fill: 'none', stroke: 'currentColor', 'stroke-width': 3.1, 'stroke-linecap': 'round' }, g);
   const tailIn = el('path', { fill: 'none', stroke: '#d08a4a', 'stroke-width': 1.5, 'stroke-linecap': 'round' }, g);
   const legs = pen(g, SP * 1.6);
@@ -37,6 +37,7 @@ export function createCat(parent, glow, { x, y }) {
     g, hit,
     poke() { if (seqT < 0) seqT = 0; },
     draw(t, dt, P) {
+      if (g.style.display === 'none') { eyesGlow.forEach(n => n.setAttribute('opacity', '0')); return; }
       // which pose now?
       const awakeAtNight = P.night > 0.55;
       let pose;

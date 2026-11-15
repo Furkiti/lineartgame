@@ -115,7 +115,7 @@ export function createUI(svg: SVGSVGElement) {
   }
 
   // ------------------------------------------------------------------ ghost hand: shows a gesture once
-  const hand = el('g', { opacity: 0 }, root);
+  const hand = el('g', { opacity: 0, 'data-gesture-hand': '' }, root);
   const handTrail = el('path', { fill: 'none', stroke: 'currentColor', 'stroke-width': 1, 'stroke-linecap': 'round', 'stroke-dasharray': '0.1 3', opacity: 0.6 }, root);
   const handInner = el('g', {}, hand);
   el('path', { d: 'M0 0 Q-1.6 -0.4 -1.6 1.6 L-1.4 9 Q-4.6 7 -6 8.6 Q-6.8 10 -4.8 12 L0.4 18 Q2.6 20.6 6.6 20.6 L10 20.6 Q14.6 20.4 15 15.6 L15.4 9.6 Q15.4 7.6 13.4 7.6 Q12.2 7.6 11.8 8.8 Q11.8 6.6 9.8 6.6 Q8.4 6.6 8 8 Q8 6 6 6 Q4.4 6 4 7.4 L1.8 1.6 Q1.6 0 0 0Z', fill: PAPER, stroke: 'currentColor', 'stroke-width': 0.9, 'stroke-linejoin': 'round', opacity: 0.92 }, handInner);
@@ -215,6 +215,15 @@ export function createUI(svg: SVGSVGElement) {
 
   return {
     root, say, hint, guide,
+    showWalkingGesture() {
+      hand.setAttribute('data-tutorial', 'walk');
+      showGesture('path', () => Array.from({ length: 49 }, (_, i) => {
+        const a = i / 48 * Math.PI * 2;
+        return [view.x + view.w * (.42 + Math.sin(a) * .09), view.y + view.h * (.82 + Math.sin(a * 2) * .023)] as Vec;
+      }), { period: 3.1 });
+    },
+    dismissDialogue() { balloons.filter(b => b !== hintBalloon).forEach(b => { b.dur = Math.min(b.dur, b.t + .25); }); },
+    get typing() { return balloons.some(b => b !== hintBalloon && b.t < .12 + b.full.join('').length / 34); },
     companionVisible(show: boolean) { cr.visible = show; },
     get companionDocked() { return !cr.on && cr.dockDistance < 12; }, showGesture, hideGesture, stillness, heart, sparkle,
     get guiding() { return cr.on; },

@@ -2,9 +2,9 @@
 // and this layer takes over: the same ink and paper, drawn big, with the traveller's
 // own hands and indigo sleeves doing what your finger does.
 //   1 · stir the rice   — draw slow circles in the tub (too fast and it clumps)
-//   2 · slice the fish  — tap anywhere for each slice
+//   2 · slice the fish  — swipe down, from anywhere on the counter
 //   3 · shape nigiri    — tap anywhere; the hands shape the rice
-//   4 · plate them      — tap anywhere, or drag each piece onto the geta
+//   4 · plate them      — drag each piece from the board onto the geta
 import { f, pt, type Vec } from '../lib/ink.ts';
 import { rgb, hex, mix } from '../village/kit.ts';
 import { sfx, haptic, clamp01, lerp, easeOut, easeInOut, backOut, elasticOut, approach } from './fx.ts';
@@ -206,7 +206,6 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit }: { o
   // ------------------------------------------------------------------ state
   let open = false, op = 0, step = 0, stepT = 0, cam = { x0: 0, y0: 0, x1: 640, y1: 300 }, camFrom = { ...cam }, camTo = { ...cam }, camT = 1;
   let stir = 0, swirl = 0, clump = 0, lastAng: number | null = null, lastStirSnd = 0, sayT = 9, tipT = 0, idle = 0;
-  let cutTapT = -1;
   let cuts = 0, knifeY = 0, cutting = false, cutStartY = 0, cutVel = 0;
   let holdI = -1, holdT = 0, pressPh = 0;
   let drag: { i: number; off: Vec } | null = null, plated = 0;
@@ -218,7 +217,7 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit }: { o
   const after = (s: number, fn: () => void) => later.push({ at: now + s, fn });
 
   const STEP_TITLES = ['Pirinci karıştır', 'Balığı dilimle', 'Nigiri şekillendir', 'Tabağa diz'];
-  const STEP_TIPS = ['Kapta parmağınla yavaş daireler çiz.', 'Her dokunuşta bir dilim. İstediğin yere dokun.', 'Her dokunuşta bir nigiri. İstediğin yere dokun.', 'İstediğin yere dokun; sıradaki nigiri tabağa geçsin.'];
+  const STEP_TIPS = ['Kapta parmağınla yavaş daireler çiz.', 'Aşağı kaydır; bıçak elini izlesin.', 'Her dokunuşta bir nigiri. İstediğin yere dokun.', 'Nigiriyi tut, ahşap tabağa sürükle ve bırak.'];
   function frameTo(r: readonly number[], instant = false) {
     camFrom = { ...cam }; camTo = { x0: r[0], y0: r[1], x1: r[2], y1: r[3] }; camT = instant ? 1 : 0;
     if (instant) cam = { ...camTo };
@@ -234,7 +233,9 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit }: { o
   function teach() {
     if (step === 0) ghost = { kind: 'path', pts: Array.from({ length: 25 }, (_, i) => [TUB[0] + Math.cos(i / 24 * 6.283 - 1.2) * 44, TUB[1] + 2 + Math.sin(i / 24 * 6.283 - 1.2) * 17] as Vec), t: 0, period: 2.6 };
     // Demonstrate the same brief tap below the food in all three steps.
-    if (step > 0 && step < 4) ghost = { kind: 'tap', pts: [[step === 3 ? 400 : 316, 275]], t: 0, period: 1.8 };
+    if (step === 1) ghost = { kind: 'path', pts: [[280, 162], [280, 245]], t: 0, period: 2.2 };
+    if (step === 2) ghost = { kind: 'tap', pts: [[316, 275]], t: 0, period: 1.8 };
+    if (step === 3) { const i = nigiri.findIndex(n => n.slot < 0); if (i >= 0) ghost = { kind: 'path', pts: [[...nigiri[i].pos], [...SLOT[plated]]], t: 0, period: 2.5 }; }
   }
 
   // ------------------------------------------------------------------ input
@@ -245,14 +246,14 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit }: { o
     e.preventDefault(); svg.setPointerCapture(e.pointerId);
     const p = toWorld(e); finger = p; pressStart = p; fingerDown = true; lastPt = p; lastMoveT = now; idle = 0; ghost = null;
     if (step === 0) lastAng = Math.atan2((p[1] - TUB[1]) / 0.42, p[0] - TUB[0]);
-    if (step === 1 && cuts < 3 && cutTapT < 0) { cutTapT = 0; cutting = true; knifeY = 0; }
+    if (step === 1 && cuts < 3) { cutting = true; cutStartY = p[1]; cutVel = 0; knifeY = 0; }
     if (step === 2 && holdI < 0) {
       const i = nigiri.findIndex(n => n.shape < 1);
       if (i >= 0) { holdI = i; holdT = 0; nigiri[i].shape = Math.min(1, nigiri[i].shape + .02); if (nigiri[i].shape >= 1) { nigiri[i].drape = 0; holdI = -1; sfx.chime(); } }
     }
     if (step === 3) {
       const hit = nigiri.findIndex(n => n.slot < 0 && Math.hypot(p[0] - n.pos[0], p[1] - n.pos[1] + 10) < 30);
-      const i = hit >= 0 ? hit : nigiri.findIndex(n => n.slot < 0);
+      const i = hit;
       if (i >= 0) { drag = { i, off: [nigiri[i].pos[0] - p[0], nigiri[i].pos[1] - p[1]] }; sfx.tap(); haptic(6); }
     }
   });
@@ -272,22 +273,23 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit }: { o
       }
       lastAng = a;
     }
-    if (step === 1 && cutting && cutTapT < 0) { cutVel = (p[1] - (lastPt?.[1] ?? p[1])) / dtm; knifeY = Math.max(0, p[1] - cutStartY); }
+    if (step === 1 && cutting) { cutVel = (p[1] - (lastPt?.[1] ?? p[1])) / dtm; knifeY = Math.max(0, p[1] - cutStartY); }
     if (step === 3 && drag) nigiri[drag.i].pos = [p[0] + drag.off[0], p[1] + drag.off[1]];
     finger = p; lastPt = p; lastMoveT = now;
   });
-  const up = () => {
+  const up = (commit = true) => {
     if (!fingerDown) return;
     fingerDown = false; lastAng = null;
-    if (step === 1 && cutting && cutTapT < 0) { cutting = false; if (knifeY < BLOCK.y1 - BLOCK.y0 + 6 && cutVel > 600) knifeY = 999; else if (knifeY < BLOCK.y1 - BLOCK.y0 + 6) knifeY = 0; }
+    if (step === 1 && cutting) { cutting = false; if (commit && knifeY < BLOCK.y1 - BLOCK.y0 + 6 && cutVel > 600) knifeY = 999; else if (knifeY < BLOCK.y1 - BLOCK.y0 + 6) knifeY = 0; }
     if (step === 3 && drag) {
       const n = nigiri[drag.i];
-      if ((finger && Math.hypot(finger[0] - pressStart[0], finger[1] - pressStart[1]) < 12) || (n.pos[0] > 450 && n.pos[0] < 630 && n.pos[1] > 140 && n.pos[1] < 250)) { n.slot = plated++; n.plated = 0; sfx.press(); haptic(10); }
+      if (commit && (n.pos[0] > 450 && n.pos[0] < 630 && n.pos[1] > 140 && n.pos[1] < 250)) { n.slot = plated++; n.plated = 0; sfx.press(); haptic(10); }
+      if (n.slot < 0) n.pos = [...MOUND[drag.i]];
       drag = null;
     }
   };
-  svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
-  addEventListener('blur', up);
+  svg.addEventListener('pointerup', () => up(true)); svg.addEventListener('pointercancel', () => up(false));
+  addEventListener('blur', () => up(false));
   back.addEventListener('click', () => { if (open) api.close(); });
 
   // ------------------------------------------------------------------ api
@@ -299,7 +301,7 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit }: { o
     get _step() { return step; },
     /** open at a given recipe step (0…3) */
     open(from: number) {
-      open = true; doneT = -1; taught = {}; cutTapT = -1; fingerDown = false; holdI = -1;
+      open = true; doneT = -1; taught = {}; cutting = false; knifeY = 0; fingerDown = false; holdI = -1;
       svg.classList.add('show'); back.classList.add('show'); tip.classList.remove('show');
       // restore the board to match the step
       stir = from > 0 ? 20 : 0; clump = 0; advancing = false;
@@ -390,11 +392,10 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit }: { o
       cutLine.setAttribute('stroke-dashoffset', f(-t * 12));
       knife.setAttribute('opacity', f(step === 1 ? 1 : 0));
       if (step === 1) {
-        if (cutTapT >= 0) { cutTapT += dt; knifeY = (BLOCK.y1 - BLOCK.y0 + 8) * easeInOut(clamp01(cutTapT / .24)); }
         if (!cutting && knifeY !== 999) knifeY = approach(knifeY, 0, 10, dt);
-        if (knifeY === 999 || knifeY > BLOCK.y1 - BLOCK.y0 + 6) {
+        if (cuts < 3 && (knifeY === 999 || knifeY > BLOCK.y1 - BLOCK.y0 + 6)) {
           // the cut: a slice tips over onto the board
-          slices[cuts].t = 0; cuts++; cutTapT = -1; knifeY = 0; cutting = false; sfx.slice(); haptic(14);
+          slices[cuts].t = 0; cuts++; knifeY = 0; cutting = false; sfx.slice(); haptic(14);
           onStep(cuts >= 3 ? 2 : 1);
           if (cuts >= 3) after(0.9, () => { if (open && step === 1) { sfx.success(); setStep(2); } });
         }

@@ -5,7 +5,7 @@ export function nextVisit(visit: Visit, tau: number, inside: boolean): Visit {
   return visit;
 }
 export function timeRate(mode: string, day: number, kiteDone: boolean, modal: boolean) {
-  if (modal || mode === 'intro' || mode === 'cine' || mode === 'sleep' || (!kiteDone && day === 1)) return 0;
+  if (modal || mode === 'intro' || mode === 'cine' || mode === 'sleep' || mode === 'craft' || (!kiteDone && day === 1)) return 0;
   if (mode === 'brush' || mode === 'desk' || mode === 'cook') return .12;
   return 1;
 }

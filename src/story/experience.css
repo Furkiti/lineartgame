@@ -30,6 +30,18 @@
 .story.modal-open #clock{color:#302d27;background:#fffaf0e8;border-radius:8px;padding:0 6px}
 /* Never let the animated title prompt survive into the first conversation. */
 #opening.open em{animation:none!important;opacity:0!important;visibility:hidden}
-.story #act{bottom:var(--action-bottom,clamp(110px,20%,180px))}
+.story #act{bottom:clamp(100px,23%,190px)}
 .story .choices{bottom:clamp(80px,18%,150px)}
 .street-guide{background:none;border:0;box-shadow:none}
+/* Hands-on tasks keep one stable workspace and a generously sized drag target. */
+.handwork{position:absolute;inset:0;z-index:9;display:none;flex-direction:column;align-items:center;padding:58px 14px 18px;background:#f7efdf;color:#34312c;font-family:Georgia,serif;touch-action:none}
+.handwork.show{display:flex;animation:paperArrive .35s ease-out}
+.handwork header{text-align:center;flex:none}.handwork small{color:#a34d40;font-size:12px;letter-spacing:.08em}.handwork h1{font-size:24px;font-weight:500;margin:8px 0}.handwork p{font-size:14px;margin:0 0 9px}
+.handwork svg{width:100%;min-height:100px;flex:1;overflow:visible;touch-action:none}
+.handwork-back{flex:none;background:none;border:1px solid #b7a78d;border-radius:18px;padding:10px 16px;color:#5f5340;font:13px Georgia,serif;min-height:42px}
+@media(max-height:500px){.handwork{flex-direction:row;padding:46px 14px 10px;gap:12px}.handwork header{width:25%}.handwork svg{width:50%;height:100%}.handwork-back{max-width:20%}}
+/* A game scene must never acquire a scroll offset when a focused control or a
+   dragged SVG part extends past its frame. Notebook pages still scroll normally. */
+@supports(overflow:clip){html,body,.card,#village{overflow:clip}}
+.drawing-paper,.handwork{box-sizing:border-box}
+@media(orientation:landscape) and (max-height:520px){.story #act{left:auto;right:24px;bottom:100px;transform:translateY(8px)}.story #act.show{transform:none;animation:actInR .3s ease-out}.story #act:active{transform:translateY(2px)}}

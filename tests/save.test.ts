@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { readSave, writeSave, resetSave, SAVE_KEY, type SavedGame } from '../src/story/save.ts';
+import { readSave, writeSave, resetSave, SAVE_KEY, DRAFT_KEY, type SavedGame } from '../src/story/save.ts';
 
 test('damaged or obsolete saves fall back to a new game without throwing', () => {
   let value: string | null = null;
@@ -13,14 +13,15 @@ test('damaged or obsolete saves fall back to a new game without throwing', () =>
 });
 
 test('reset prevents unload autosave from recreating the deleted journey', () => {
-  let value: string | null = '{"version":2}';
+  const values = new Map([[SAVE_KEY, '{"version":2}'], [DRAFT_KEY, '{"title":"unfinished drawing"}']]);
   Object.defineProperty(globalThis, 'localStorage', { configurable: true, value: {
-    getItem: () => value,
-    setItem: (_: string, next: string) => { value = next; },
-    removeItem: () => { value = null; },
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, next: string) => { values.set(key, next); },
+    removeItem: (key: string) => { values.delete(key); },
   } });
   assert.equal(resetSave(), true);
-  assert.equal(value, null);
+  assert.equal(values.has(SAVE_KEY), false);
+  assert.equal(values.has(DRAFT_KEY), false);
   assert.equal(writeSave({ version: 2, story: { day: 3 }, art: {}, home: {}, world: { x: 450, y: 350, inside: false, fair: false, tau: .8 } }), false);
-  assert.equal(value, null);
+  assert.equal(values.has(SAVE_KEY), false);
 });

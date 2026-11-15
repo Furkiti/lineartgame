@@ -17,6 +17,7 @@ test('the first lesson, notebook and conversations protect the player from a tic
   assert.equal(timeRate('intro', 1, false, false), 0);
   assert.equal(timeRate('cine', 2, true, false), 0);
   assert.equal(timeRate('walk', 2, true, true), 0);
+  assert.equal(timeRate('craft', 3, true, false), 0);
   for (const mode of ['brush', 'desk', 'cook']) assert.equal(timeRate(mode, 2, true, false), .12);
   assert.equal(timeRate('walk', 2, true, false), 1);
 });

@@ -24,17 +24,19 @@ export function createKenta(parent: Element, x: number, y: number) {
   const band = el('path', { fill: '#b3412d' }, g);
   const eye = el('path', { fill: 'none', stroke: 'currentColor', 'stroke-width': PEN * 0.7, 'stroke-linecap': 'round' }, g);
   const arm = limb(g, 3);
+  const bite = el('g', { opacity: 0 }, g);
+  bite.innerHTML = '<path d="M-4 0Q-5-5 0-5Q5-5 4 0Z" fill="#fff9ed" stroke="currentColor" stroke-width=".7"/><path d="M-5-3Q0-7 5-3L4-1Q0-3-4-1Z" fill="#e98d60" stroke="currentColor" stroke-width=".7"/>';
   const walk = gait({ kind: 'walk', thigh: 13, shin: 13, stride: 12, lift: 3.4, period: 0.62, ankleY: 118.4, toe: 3 });
 
-  let phase = 0, go = 0, hopT = -1, look = 0, sad = 0, raise = 0, tx = x, ty = y, wave = 0, tNow = 0;
+  let seat = 0, eat = 0, phase = 0, go = 0, hopT = -1, look = 0, sad = 0, raise = 0, tx = x, ty = y, wave = 0, tNow = 0;
   const self = {
-    g, x, y, dir: -1 as number, speed: 26,
+    g, x, y, dir: -1 as number, speed: 26, seated: false, faceTarget: null as number | null,
     /** 0…1 targets the body eases toward */
-    want: { look: 0, sad: 0, raise: 0, wave: 0 },
+    want: { look: 0, sad: 0, raise: 0, wave: 0, talk: 0, eat: 0, food: 0 },
     hand: [x, y - 30] as Vec,
     head: [x, y - 40] as Vec,
     walkTo(nx: number, ny = self.y) { tx = nx; ty = ny; },
-    get walking() { return Math.abs(tx - self.x) > 1.5 || Math.abs(ty - self.y) > 1; },
+    get walking() { return Math.hypot(tx - self.x, ty - self.y) > 1.5; },
     hop() { if (hopT < 0) hopT = 0; },
     draw(t: number, dt: number, P: { inkT: number }) {
       tNow = t;
@@ -47,6 +49,9 @@ export function createKenta(parent: Element, x: number, y: number) {
         self.x += (dx / d) * sp * dt; self.y += (dy / d) * sp * dt * 0.7;
         if (Math.abs(dx) > 2) self.dir = dx > 0 ? 1 : -1;
       }
+      if (self.faceTarget !== null) self.dir = self.faceTarget < self.x ? -1 : 1;
+      g.setAttribute('data-facing', String(self.dir));
+      if (!moving) { self.x = tx; self.y = ty; }
       phase += (dt / walk.period) * go;
       look = approach(look, self.want.look, 4, dt); sad = approach(sad, self.want.sad, 3, dt);
       raise = approach(raise, self.want.raise, 6, dt); wave = approach(wave, self.want.wave, 5, dt);
@@ -54,21 +59,24 @@ export function createKenta(parent: Element, x: number, y: number) {
       if (hopT >= 0) { hopT += dt; hop = Math.sin(Math.PI * clamp01(hopT / 0.5)) * 14; if (hopT > 0.5) hopT = -1; }
       place(g, self.x, self.y - hop * FS, self.dir);
 
+      seat = approach(seat, self.seated ? 1 : 0, 6, dt); eat = approach(eat, self.want.eat, 9, dt);
       const pose = walk.pose(phase, go);
       const breathe = Math.sin(t * 2.2) * 0.4 * (1 - go);
-      const hip: Vec = [40, pose.hip[1] + 1.6 * sad + breathe * 0.3];
+      const hip: Vec = [40, pose.hip[1] + 1.6 * sad + breathe * 0.3 + seat * 14];
       pose.feet.forEach((fo, i) => {
         const a = hop > 1 ? [fo.ankle[0] - 1 + i * 2, fo.ankle[1] - 4] as Vec : fo.ankle;
-        legs[i].L.draw([hip, fo.knee, a], [0.2, 0.4]);
+        const knee: Vec = [lerp(fo.knee[0], 51 + i * 2, seat), lerp(fo.knee[1], 113, seat)];
+        a[0] = lerp(a[0], 49 + i * 2, seat);
+        legs[i].L.draw([hip, knee, a], [0.2, 0.4]);
         legs[i].S.setAttribute('d', `M${f(a[0] - 2)} ${f(a[1])} L${f(a[0] + 4)} ${f(a[1])} Q${f(a[0] + 5)} ${f(a[1] + 2)} ${f(a[0] + 3)} ${f(a[1] + 2)} L${f(a[0] - 2)} ${f(a[1] + 2)}Z`);
       });
       g.appendChild(legs[pose.front].L.g); g.insertBefore(legs[pose.front].L.g, shorts);
       // shoulders slump when sad, chest opens when looking up
-      const sh: Vec = [43 + go * 2 - sad * 1.4 - look * 1.2, 74 + sad * 2 + breathe];
+      const sh: Vec = [43 + go * 2 - sad * 1.4 - look * 1.2, 74 + sad * 2 + breathe + seat * 14];
       shorts.setAttribute('d', `M34.6 ${f(hip[1] - 4)} L46 ${f(hip[1] - 4)} L47 ${f(hip[1] + 4)} L41 ${f(hip[1] + 4.6)} L40 ${f(hip[1] + 1)} L37.6 ${f(hip[1] + 4.6)} L33.8 ${f(hip[1] + 3.6)}Z`);
       shirt.setAttribute('d', `M35 ${f(hip[1] - 3.6)} Q34.2 ${f(sh[1] + 6)} ${f(sh[0] - 6)} ${f(sh[1])} Q${f(sh[0])} ${f(sh[1] - 2.6)} ${f(sh[0] + 3)} ${f(sh[1] + 1)} Q47.4 ${f(sh[1] + 10)} 46.4 ${f(hip[1] - 3.6)}Z`);
       // head: down when sad, back when looking up
-      const tilt = -look * 24 + sad * 14;
+      const tilt = -look * 24 + sad * 14 + self.want.talk * Math.sin(t * 2.8) * 3;
       const hc: Vec = [sh[0] + 2.4 + sad * 1.6 - look * 1.4, sh[1] - 11 + sad * 1.4];
       head.setAttribute('cx', f(hc[0])); head.setAttribute('cy', f(hc[1]));
       const R = (dx: number, dy: number): string => { const a = tilt * RAD, c = Math.cos(a), s = Math.sin(a); return `${f(hc[0] + dx * c - dy * s)} ${f(hc[1] + dx * s + dy * c)}`; };
@@ -84,11 +92,13 @@ export function createKenta(parent: Element, x: number, y: number) {
       const fe: Vec = [fsh[0] + Math.sin(swing * RAD) * 8, fsh[1] + Math.cos(swing * RAD) * 8];
       farArm.draw([fsh, fe, [fe[0] + Math.sin((swing - 30) * RAD) * 8, fe[1] + Math.cos((swing - 30) * RAD) * 8]], [0.2, 0.4]);
       const nsh: Vec = [sh[0], sh[1] + 1.5];
-      const up = Math.max(raise, wave);
+      const up = Math.max(raise, wave, self.want.talk * (.16 + Math.sin(t * 2) * .07));
       const aa = lerp(-swing - sad * 10, 150 + Math.sin(t * 9) * 18 * wave, up) * RAD;
       const ne: Vec = [nsh[0] + Math.sin(aa) * 8, nsh[1] + Math.cos(aa) * 8];
       const hn: Vec = [ne[0] + Math.sin(aa - 0.3 * (1 - up)) * 8, ne[1] + Math.cos(aa - 0.3 * (1 - up)) * 8];
+      hn[0] = lerp(hn[0], hc[0] + 4, eat); hn[1] = lerp(hn[1], hc[1] + 4, eat);
       arm.draw([nsh, ne, hn], [0.2, 0.4]);
+      bite.setAttribute('transform', `translate(${f(hn[0])} ${f(hn[1])})`); bite.setAttribute('opacity', f(self.want.food));
       self.hand = [self.x + self.dir * FS * (hn[0] - 40), self.y - hop * FS + FS * (hn[1] - 120)];
       self.head = [self.x + self.dir * FS * (hc[0] - 40), self.y - hop * FS + FS * (hc[1] - 120)];
       shorts.setAttribute('fill', tint('#33465e', P)); hat.setAttribute('fill', tint('#e6cf8e', P));
@@ -109,14 +119,14 @@ export function createStuckKite(parent: Element, at: Vec) {
   let op = 1, state: 'stuck' | 'escaping' | 'gone' = 'stuck', away = 0;
   return {
     g, at,
-    release() { state = 'escaping'; away = 0; },
+    release() { if (state === 'stuck') { state = 'escaping'; away = 0; } },
     remove() { state = 'gone'; },
     draw(t: number, dt: number, wind: number) {
       if (state === 'escaping') away += dt;
-      if (state === 'gone' || away > 2.2) op = approach(op, 0, 3, dt);
-      g.setAttribute('opacity', f(op));
+      if (state === 'gone' || away > 9) op = approach(op, 0, 3, dt);
+      g.setAttribute('opacity', f(op)); g.setAttribute('data-state', state);
       const sw = Math.sin(t * 1.3) * 4 + wind * 3;
-      g.setAttribute('transform', `translate(${f(at[0] + away * 8 + Math.sin(away * 2) * away * 2)} ${f(at[1] - away * 24)}) rotate(${f(24 + sw - away * 4)}) scale(.95)`);
+      g.setAttribute('transform', `translate(${f(at[0] + away * 3 + Math.sin(away * 2) * away * 2)} ${f(at[1] - away * 7)}) rotate(${f(24 + sw - away * 1.5)}) scale(.95)`);
       body.setAttribute('d', 'M' + KITE.map(pt).join('L') + 'Z M0 -13 L0 13 M-9 -2 L9 -2');
       const tl: Vec[] = []; for (let i = 0; i <= 10; i++) tl.push([Math.sin(t * 2 + i * .7) * 3 * (i / 10), 13 + i * 3.2]);
       tail.setAttribute('d', 'M' + tl.map(pt).join('L'));

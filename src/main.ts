@@ -84,7 +84,7 @@ const smoke = createSmoke(back, street.chimney);
 const sparrows = createSparrows(birdsL, { wireY: street.wireY });
 const swallows = createSwallows(birdsL);
 const petals = createPetals(petalL, { blossoms: street.blossoms, canal });
-const cat = createCat(catL, glow, { x: 548, y: 330 });
+const cat = createCat(catL, glow, { x: STORY ? 700 : 548, y: 330 });
 const boat = createBoat(boatL, glow, { onRipple: (x, y) => canal.ring(x, y, 2) });
 
 street.windows.forEach((w) => canal.addRefl(() => w.lit, (w.x0 + w.x1) / 2, Math.min(40, (w.x1 - w.x0) * 0.8)));
@@ -190,7 +190,7 @@ function exitFair() {
   player.x = 40; player.y = 362; player.setHeading(0);
   player.bounds = { ...STREET.bounds, y0: Y_MIN }; camSnap = true;
 }
-const atFairGate = () => !inside && player.x < 44;
+const atFairGate = () => !inside && player.x < 44 && (!STORY || !!story?.canVisitFair || inFair);
 function act() {
   if (pending || winN.classList.contains('show')) return;
   if (story?.act()) return;
@@ -210,7 +210,7 @@ let cam = { cx: 0, cy: 0, z: 1 }, camSnap = true;
 // framing rules (portrait first): a little zoom, the figure two-thirds down — above the thumb —
 // room ahead of where you walk, and a dead zone so small steps don't move the picture
 const OLD_CAM = q.get('cam') === 'eski';
-let camAnchor = 0, camLead = 0, idleT = 0;
+let camAnchor = 0, camLead = 0, camLeadY = 0, idleT = 0;
 function frame() {
   const r = card.getBoundingClientRect();
   cardW = r.width; cardH = r.height;
@@ -229,7 +229,6 @@ addEventListener('resize', frame); frame();
 
 // ------------------------------------------------------------------ game state & hud
 const countN = $('#count'), timeN = $('#time'), hintN = $('#hint'), winN = $('#win');
-let actionLift = 0;
 let score = 0, elapsed = 0, playing = true, best = Infinity;
 try { best = +(localStorage.getItem('ink-best') ?? Infinity) || Infinity; } catch {}
 const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
@@ -283,7 +282,7 @@ if (saved) {
 }
 let saveAt = 0, warnedSave = false, restarting = false;
 function saveGame() {
-  if (restarting || !story?.canSave || home.busy) return;
+  if (restarting || !story?.canSnapshot || home.busy) return;
   const snapshot = story.snapshot();
   const ok = writeSave({ version: 2, ...snapshot, home: home.snapshot(), world: { x: player.x, y: player.y, inside, fair: inFair, tau } });
   if (!ok && !warnedSave) { warnedSave = true; hintN.textContent = 'Bu tarayıcı ilerlemeni kaydedemiyor.'; hintN.classList.remove('gone'); }
@@ -345,7 +344,9 @@ run((t, dt) => {
   if (pending || lock || story?.freeze || !opened) j = { x: 0, y: 0 };
   if (pending || story?.freeze || !opened) stick.reset();
   if (lock) { const e = 1 - Math.exp(-dt * 10); player.x = lerp(player.x, lock.x, e); player.y = lerp(player.y, lock.y, e); }
-  player.faceTo = lock ? lock.heading : null;
+  player.faceTo = lock ? lock.heading : story?.facing ?? null;
+  player.reach = inside ? home.reach : null;
+  player.sitting = Math.max(inside ? home.sitting : 0, story?.sitting ?? 0);
   player.pose = inside ? home.pose : { work: 0, chop: 0, hold: 0 };
   // the alley: past its mouth you can walk in, growing smaller, the street falling behind
   let alleyDepth = 0;
@@ -385,15 +386,7 @@ run((t, dt) => {
   const sp = story ? story.prompt() : null;
   const hp = inside ? home.prompt(player) : null;
   const label = pending || home.busy || sp === '' ? null : sp ?? (inside ? (STORY && hp === 'Dışarı çık' ? null : hp) : atFairGate() ? (inFair ? 'Sokağa dön' : 'Panayıra git') : atDoor() && !winN.classList.contains('show') && !STORY ? 'İçeri gir' : null);
-  if (label && actN.textContent !== label) { actN.textContent = label; actionLift = 0; }
-  const defaultBottom = clamp(cardH * .2, 110, 180);
-  const pointer = stick.origin;
-  const buttonHeight = 42;
-  if (label && stick.active && Math.abs(pointer.x - cardW / 2) < 120 && Math.abs(pointer.y - (cardH - defaultBottom - buttonHeight / 2)) < 95) {
-    actionLift = Math.max(actionLift, clamp(cardH - pointer.y + 120, defaultBottom, cardH * .48));
-  }
-  if (!label) actionLift = 0;
-  actN.style.setProperty('--action-bottom', `${Math.max(defaultBottom, actionLift)}px`);
+  if (label && actN.textContent !== label) actN.textContent = label;
   actN.classList.toggle('show', !!label);
 
   // camera: eases after you and leads a little where you face, or glides to what the story frames
@@ -405,19 +398,20 @@ run((t, dt) => {
     const portrait = cardW / Math.max(1, cardH) < 0.8;
     const z = inside ? Math.min(1.5, vb.h / 200) : portrait ? 1.08 : 1;
     const w = vb.w / z, h = vb.h / z;
-    // dead zone: the anchor only moves when you get more than a little way from it
-    const dz = w * 0.1;
-    if (camSnap) camAnchor = player.x;
-    if (player.x - camAnchor > dz) camAnchor = player.x - dz; else if (camAnchor - player.x > dz) camAnchor = player.x + dz;
-    // standing still a while: drift back to centre you
-    idleT = player.moving > 0.05 ? 0 : idleT + dt;
-    if (idleT > 1.2) camAnchor = approach(camAnchor, player.x, 0.6, dt);
-    // lead from where you are actually going, not where you face
-    const vx = Math.cos(player.heading) * player.moving * Math.min(1, player.speed / 30);
-    camLead = approach(camLead, vx * w * 0.17, player.moving > 0.05 ? 1.1 : 0.7, dt);
+    // Follow the traveller, and open the view in the actual input direction.
+    // A large dead zone used to cancel most of that lead during a walk.
+    if (camSnap) { camAnchor = player.x; camLead = camLeadY = 0; }
+    camAnchor = approach(camAnchor, player.x, 9, dt);
+    const moving = Math.hypot(j.x, j.y) > .12;
+    idleT = moving ? 0 : idleT + dt;
+    const mag = Math.hypot(j.x, j.y) || 1;
+    const aimX = moving ? j.x / mag * w * (inside ? .16 : .25) : idleT > 1 ? 0 : camLead;
+    const aimY = moving ? j.y / mag * Math.min(12, h * .035) : 0;
+    camLead = approach(camLead, aimX, moving ? 2.8 : .7, dt);
+    camLeadY = approach(camLeadY, aimY, 2.2, dt);
     // feet two-thirds of the way down the frame (street level ~366, floor ~362)
     const ratio = portrait || inside ? 0.67 : 0.76;
-    follow = { cx: camAnchor + camLead, cy: (inside ? 362 : 366) - (ratio - 0.5) * h, z };
+    follow = { cx: camAnchor + camLead, cy: (inside ? 362 : 366) - (ratio - 0.5) * h + camLeadY, z };
     if (alleyDepth > 0) follow = { cx: lerp(follow.cx, ALLEY.x, alleyDepth), cy: lerp(follow.cy, 300, alleyDepth * 0.8), z: z * (1 + alleyDepth * 0.7) };
   }
   const want = story?.cam ?? follow;
@@ -520,4 +514,4 @@ run((t, dt) => {
   clock.innerHTML = `<b>${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}</b> <span>${period(hrs)}</span>`;
 });
 
-(window as unknown as { __game: unknown }).__game = { player, cranes, people, home, act, enter, exit, story, ui, save: saveGame, get tau() { return tau; }, setTau: (v) => { tau = v; }, get score() { return score; }, get inside() { return inside; }, get inFair() { return inFair; }, enterFair, exitFair };
+(window as unknown as { __game: unknown }).__game = { player, cranes, people, home, act, enter, exit, story, ui, save: saveGame, get camera() { return { ...cam, lead: camLead, leadY: camLeadY }; }, get tau() { return tau; }, setTau: (v) => { tau = v; }, get score() { return score; }, get inside() { return inside; }, get inFair() { return inFair; }, enterFair, exitFair };

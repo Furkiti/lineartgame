@@ -1,3 +1,4 @@
+export const DRAFT_KEY = 'ink-street-draft-v1';
 export const SAVE_KEY = 'ink-street-v2';
 let resetting = false;
 export type SavedGame = { version: 2; story: Record<string, any>; art: Record<string, any>; home: Record<string, any>; world: { x: number; y: number; inside: boolean; fair: boolean; tau: number } };
@@ -14,6 +15,6 @@ export function writeSave(save: SavedGame) { if (resetting) return false; try { 
 /** Stop unload/visibility autosaves before removing the old journey. */
 export function resetSave() {
   resetting = true;
-  try { localStorage.removeItem(SAVE_KEY); return true; }
+  try { localStorage.removeItem(SAVE_KEY); try { localStorage.removeItem(DRAFT_KEY); } catch {} return true; }
   catch { resetting = false; return false; }
 }

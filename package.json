@@ -10,7 +10,8 @@
     "preview": "vite preview --host",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "test:play": "node tests/playthrough.cjs",
-    "test:ui": "node tests/interface.cjs"
+    "test:ui": "node tests/interface.cjs",
+    "test:edges": "node tests/edgecases.cjs"
   },
   "devDependencies": {
     "playwright": "^1.62.1",
