@@ -28,3 +28,8 @@
 .cu-back{top:59px;color:#302d27;background:#fffaf0ed;border-color:#a99c83}
 .cu-tip{color:#302d27;background:#fffaf0ed;border-radius:12px;padding:9px 12px}
 .story.modal-open #clock{color:#302d27;background:#fffaf0e8;border-radius:8px;padding:0 6px}
+/* Never let the animated title prompt survive into the first conversation. */
+#opening.open em{animation:none!important;opacity:0!important;visibility:hidden}
+.story #act{bottom:var(--action-bottom,clamp(110px,20%,180px))}
+.story .choices{bottom:clamp(80px,18%,150px)}
+.street-guide{background:none;border:0;box-shadow:none}

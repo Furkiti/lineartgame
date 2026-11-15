@@ -169,6 +169,9 @@ export function buildHome(svg: SVGSVGElement) {
   S_(house, rect(66, 332, 74, BASE), SP * 0.6);
   P_(house, 'M70 332 L71 300 M71 300 Q67 312 68 330 M71 300 Q75 312 73 330', SP * 0.6);
 
+  const tableCue = el('g', { opacity: 0, 'data-hotspot': 'table', 'pointer-events': 'none' }, house);
+  el('ellipse', { cx: 186, cy: 359, rx: 24, ry: 4.5, fill: '#deb66d', 'fill-opacity': .14, stroke: '#b64b3e', 'stroke-width': .7, 'stroke-dasharray': '2 2' }, tableCue);
+  text(tableCue, 186, 316, 'Masa', 6.5);
   const bagSpot = el('g', { 'pointer-events': 'none' }, house);
   el('ellipse', { cx: 72, cy: 357, rx: 14, ry: 3.4, fill: '#d9b66d', 'fill-opacity': .22, stroke: '#b64b3e', 'stroke-width': .7, 'stroke-dasharray': '2 2' }, bagSpot);
   text(bagSpot, 72, 274, 'Bohça', 5.5);
@@ -187,7 +190,8 @@ export function buildHome(svg: SVGSVGElement) {
   const sg: string[] = [rect(152, 258, 228, 304)];
   for (let i = 1; i < 6; i++) sg.push(`M${152 + (76 * i) / 6} 258 L${152 + (76 * i) / 6} 304`);
   for (let i = 1; i < 4; i++) sg.push(`M152 ${258 + (46 * i) / 4} L228 ${258 + (46 * i) / 4}`);
-  P_(house, sg.join(' '), SP * 0.5);
+  const windowLattice = P_(house, sg.join(' '), SP * 0.5);
+  const windowAir = el('path', { fill: 'none', stroke: '#819f9a', 'stroke-width': .65, opacity: 0 }, house);
   C_(house, rect(149, 304, 231, 307), rgb(COL.wood), SP * 0.6);
   // chabudai and two cushions
   const zab = [C_(house, 'M146 352 Q145 348 150 347.6 L166 347.6 Q171 348 170 352 Q170 355 165 355 L151 355 Q146 355 146 352Z', rgb(COL.red), SP * 0.7),
@@ -200,6 +204,7 @@ export function buildHome(svg: SVGSVGElement) {
   P_(futon, 'M112 349 l0 11 M122 349 l0 11 M132 349 l0 11', SP * 0.35);
   C_(futon, 'M94 349.6 Q94 348 98 348 L101 348 Q103 348 103 350 L103 352 Q103 354 101 354 L97 354 Q94 354 94 352Z', PAPER, SP * 0.6);
   const tableTop = C_(house, `M162 335.4 Q162 331.6 186 331.6 Q210 331.6 210 335.4 L210 338 Q210 339.4 186 339.4 Q162 339.4 162 338Z`, rgb(COL.wood), SP * 0.8);
+  const tableArt = el('g', { transform: 'translate(186 335)', 'data-table-art': '' }, house);
   P_(house, 'M162 335.6 Q186 339 210 335.6', SP * 0.45);
   P_(house, 'M167 339 L167 350 M205 339 L205 350 M171 339.2 L171 347', SP * 1.1);
   // a paper lamp from the beam
@@ -342,6 +347,8 @@ export function buildHome(svg: SVGSVGElement) {
 
   const api = {
     root, actors,
+    windowOpen: false,
+    decorateTable(paths: string[]) { tableArt.innerHTML = `<path d="M-22 -3H22L24 3H-24Z" fill="#fff7df" stroke="currentColor" stroke-width=".4"/>${paths.map(d => `<path d="${d}" transform="scale(1 .3)" fill="none" stroke="#b65042" stroke-width=".7"/>`).join('')}`; },
     doorTarget: 0, doorContact: false, walkExit: false,
     get doorOpen() { return doorOpen; },
     onEnter() { autoBagReady = !bagHung; bagGetArmed = bagHung; doorOpen = 0; api.doorTarget = 0; },
@@ -350,10 +357,10 @@ export function buildHome(svg: SVGSVGElement) {
     view: { x0: IX - 14, x1: IX + IW + 14 },
     spawn: { x: IX + 44, y: 356 },
     /** The figure stands still at the board while a step plays. */
-    get lock() {
+    lock(moving = false) {
       if (iceT >= 0) return { x: IX + SPOT.icebox, y: 352, heading: -Math.PI / 2 };
       if (placeT >= 0) return lock;
-      if (bagT >= 0) return { x: IX + SPOT.peg, y: 352, heading: -Math.PI / 2 };
+      if (bagT >= 0 && !moving) return { x: IX + SPOT.peg, y: 352, heading: -Math.PI / 2 };
       return anim >= 0 ? lock : null;
     },
     /** a cat you invited, asleep on a cushion */
@@ -363,10 +370,10 @@ export function buildHome(svg: SVGSVGElement) {
     /** the story allows sleep (at night, when the day is done) */
     canSleep: false,
     canEat: true,
-    snapshot() { return { step, prep, eaten, made, bagHung, catHome: api.catHome }; },
+    snapshot() { return { step, prep, eaten, made, bagHung, catHome: api.catHome, windowOpen: api.windowOpen }; },
     restore(s: Record<string, any>) {
       step = Math.max(0, Math.min(6, Number(s.step) || 0)); prep = Math.max(0, Math.min(2, Number(s.prep) || 0));
-      eaten = Math.max(0, Math.min(3, Number(s.eaten) || 0)); made = Number(s.made) || 0; bagHung = !!s.bagHung; api.catHome = !!s.catHome;
+      eaten = Math.max(0, Math.min(3, Number(s.eaten) || 0)); made = Number(s.made) || 0; bagHung = !!s.bagHung; api.catHome = !!s.catHome; api.windowOpen = !!s.windowOpen;
       anim = iceT = placeT = bagT = eatT = resetT = -1;
       (step === 5 ? top : props).appendChild(dish);
       if (step === 0 && prep === 1) prep = 2;
@@ -389,7 +396,7 @@ export function buildHome(svg: SVGSVGElement) {
       if (w === 'cook' && step < 4 && prep === 2) return step === 0 ? 'Suşi hazırla' : 'Suşiye devam et';
       if (w === 'cook' && step === 4) return null;
       if (w === 'table' && step === 5) return null;
-      if (w === 'table' && step === 6) return api.canEat ? `Ye · ${3 - eaten} kaldı` : 'Kenta akşam gelecek';
+      if (w === 'table' && step === 6) return api.canEat ? `Ye · ${3 - eaten} kaldı` : null;
       if (w === 'futon' && api.canSleep && step !== 5) return 'Uyu';
       return null;
     },
@@ -434,6 +441,10 @@ export function buildHome(svg: SVGSVGElement) {
         handDots.forEach((dot, i) => dot.setAttribute('cx', f(40 + (i ? 1 : -1) * reach)));
       }
       bagSpot.setAttribute('opacity', f(autoBagReady && pl.carryBundle ? .45 + Math.sin(t * 2) * .14 : 0));
+      tableCue.setAttribute('opacity', f(step === 5 || (step === 6 && !api.canEat) ? .55 + Math.sin(t * 2) * .15 : 0));
+      windowLattice.setAttribute('transform', api.windowOpen ? 'translate(-18 0)' : '');
+      windowAir.setAttribute('opacity', api.windowOpen ? '.5' : '0');
+      windowAir.setAttribute('d', [0, 1, 2].map(i => `M${158 + i * 19} 297q${f(8 + Math.sin(t * 1.4 + i) * 3)} 8 2 18`).join(' '));
       // colours of the hour
       const lit = smooth(0.08, 0.3, P.lamp);
       const outside = rgb(mix(P.bot, P.top, 0.35));

@@ -229,6 +229,7 @@ addEventListener('resize', frame); frame();
 
 // ------------------------------------------------------------------ game state & hud
 const countN = $('#count'), timeN = $('#time'), hintN = $('#hint'), winN = $('#win');
+let actionLift = 0;
 let score = 0, elapsed = 0, playing = true, best = Infinity;
 try { best = +(localStorage.getItem('ink-best') ?? Infinity) || Infinity; } catch {}
 const fmt = (s: number) => `${Math.floor(s / 60)}:${(s % 60).toFixed(1).padStart(4, '0')}`;
@@ -253,8 +254,12 @@ const story = STORY && ui ? createStory({
     setTau: (v) => { tau = v; },
     fade: (v) => { fadeTo = v; },
     isFaded: () => fade >= 1,
-    isOpened: () => opened,
-    tip: (text, sticky = false) => { if (text) { hintN.textContent = text; hintN.classList.remove('gone'); tipUntil = sticky ? Infinity : tNow + 4.5; } else { hintN.classList.add('gone'); tipUntil = -1; } },
+    isOpened: () => openingReady,
+    tip: (text, sticky = false) => {
+      if (ui) { ui.hint(() => [player.x, player.y - 54], text, sticky); hintN.classList.add('gone'); return; }
+      if (text) { hintN.textContent = text; hintN.classList.remove('gone'); tipUntil = sticky ? Infinity : tNow + 4.5; }
+      else { hintN.classList.add('gone'); tipUntil = -1; }
+    },
     banner: (a, b) => { bannerN.innerHTML = `<b>${a}</b><span>${b}</span>`; bannerN.classList.remove('show'); void bannerN.offsetWidth; bannerN.classList.add('show'); },
   },
 }) : null;
@@ -263,12 +268,13 @@ card.addEventListener('pointerdown', (e) => story?.touch(e), true);
 // ------------------------------------------------------------------ opening: two shoji doors slide apart
 const openingN = $('#opening');
 let opened = !!saved || !STORY || (q.has('debug') && !q.has('opening'));
+let openingReady = opened;
 if (opened) openingN.remove();
 else openingN.addEventListener('click', () => {
   if (opened) return;
   opened = true; openingN.classList.add('open');
   story?.opened();
-  setTimeout(() => openingN.remove(), 2400);
+  setTimeout(() => { openingN.remove(); openingReady = true; }, 1900);
 });
 
 if (saved) {
@@ -335,7 +341,7 @@ run((t, dt) => {
   // you
   tNow = t;
   let j = stick.read();
-  const lock = inside ? home.lock : null;
+  const lock = inside ? home.lock(stick.active || Math.hypot(j.x, j.y) > .12) : null;
   if (pending || lock || story?.freeze || !opened) j = { x: 0, y: 0 };
   if (pending || story?.freeze || !opened) stick.reset();
   if (lock) { const e = 1 - Math.exp(-dt * 10); player.x = lerp(player.x, lock.x, e); player.y = lerp(player.y, lock.y, e); }
@@ -354,7 +360,7 @@ run((t, dt) => {
   if (STORY && inside) {
     const aligned = Math.abs(player.x - (home.spawn.x - 4)) < 19;
     const canLeave = !home.carrying && home.prep !== 1 && !home.busy && !story?.freeze;
-    const doorDepth = aligned ? clamp((365 - player.y) / 32, 0, 1) : 0;
+    const doorDepth = aligned ? clamp((365 - player.y) / 19, 0, 1) : 0;
     home.doorTarget = canLeave ? doorDepth : 0;
     home.doorContact = canLeave && doorDepth > .12 && doorDepth < .96;
     player.bounds = { ...home.bounds, y0: canLeave && aligned ? 326 : Y_MIN };
@@ -362,8 +368,8 @@ run((t, dt) => {
     if (home.doorContact) player.faceTo = -Math.PI / 2;
     player.scale = 1 - doorDepth * .12;
     player.g.style.opacity = String(1 - clamp((345 - player.y) / 18, 0, .55));
-    exitHold = canLeave && aligned && player.y < 334 && j.y < -.2 && home.doorOpen > .94 ? exitHold + dt : 0;
-    if (exitHold > .12 && !pending) { exitHold = 0; go(exit); }
+    exitHold = canLeave && aligned && player.y < 345 && j.y < -.2 && home.doorOpen > .82 ? exitHold + dt : 0;
+    if (exitHold > .06 && !pending) { exitHold = 0; go(exit); }
   }
   player.update(t, dt, j.x, j.y, P, wind);
   if (!STORY && stick.touched && t > hintUntil) hintN.classList.add('gone');
@@ -378,8 +384,16 @@ run((t, dt) => {
   story?.update({ t, dt, P, wind, tau, inside, fair: inFair, base: { w: vb.w, h: vb.h }, stickActive: stick.active, stickTouched: stick.touched });
   const sp = story ? story.prompt() : null;
   const hp = inside ? home.prompt(player) : null;
-  const label = pending || sp === '' ? null : sp ?? (inside ? (STORY && hp === 'Dışarı çık' ? null : hp) : atFairGate() ? (inFair ? 'Sokağa dön' : 'Panayıra git') : atDoor() && !winN.classList.contains('show') && !STORY ? 'İçeri gir' : null);
-  if (label && actN.textContent !== label) actN.textContent = label;
+  const label = pending || home.busy || sp === '' ? null : sp ?? (inside ? (STORY && hp === 'Dışarı çık' ? null : hp) : atFairGate() ? (inFair ? 'Sokağa dön' : 'Panayıra git') : atDoor() && !winN.classList.contains('show') && !STORY ? 'İçeri gir' : null);
+  if (label && actN.textContent !== label) { actN.textContent = label; actionLift = 0; }
+  const defaultBottom = clamp(cardH * .2, 110, 180);
+  const pointer = stick.origin;
+  const buttonHeight = 42;
+  if (label && stick.active && Math.abs(pointer.x - cardW / 2) < 120 && Math.abs(pointer.y - (cardH - defaultBottom - buttonHeight / 2)) < 95) {
+    actionLift = Math.max(actionLift, clamp(cardH - pointer.y + 120, defaultBottom, cardH * .48));
+  }
+  if (!label) actionLift = 0;
+  actN.style.setProperty('--action-bottom', `${Math.max(defaultBottom, actionLift)}px`);
   actN.classList.toggle('show', !!label);
 
   // camera: eases after you and leads a little where you face, or glides to what the story frames

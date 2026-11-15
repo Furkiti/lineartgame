@@ -103,20 +103,22 @@ export type Kenta = ReturnType<typeof createKenta>;
 const KITE: Vec[] = [[0, -13], [9, -2], [0, 13], [-9, -2]]; // a diamond, nose up
 
 export function createStuckKite(parent: Element, at: Vec) {
-  const g = el('g', {}, parent);
+  const g = el('g', { 'data-lost-kite': '' }, parent);
   const body = el('path', { fill: '#d76c46', stroke: 'currentColor', 'stroke-width': 1.1, 'stroke-linejoin': 'round' }, g);
   const tail = el('path', { fill: 'none', stroke: 'currentColor', 'stroke-width': 0.8 }, g);
-  let op = 1, gone = false, fall = 0;
+  let op = 1, state: 'stuck' | 'escaping' | 'gone' = 'stuck', away = 0;
   return {
     g, at,
-    remove() { gone = true; },
+    release() { state = 'escaping'; away = 0; },
+    remove() { state = 'gone'; },
     draw(t: number, dt: number, wind: number) {
-      if (gone) { op = approach(op, 0, 3, dt); fall += dt * 30; }
+      if (state === 'escaping') away += dt;
+      if (state === 'gone' || away > 2.2) op = approach(op, 0, 3, dt);
       g.setAttribute('opacity', f(op));
       const sw = Math.sin(t * 1.3) * 4 + wind * 3;
-      g.setAttribute('transform', `translate(${f(at[0])} ${f(at[1] + fall)}) rotate(${f(24 + sw)}) scale(0.95)`);
+      g.setAttribute('transform', `translate(${f(at[0] + away * 8 + Math.sin(away * 2) * away * 2)} ${f(at[1] - away * 24)}) rotate(${f(24 + sw - away * 4)}) scale(.95)`);
       body.setAttribute('d', 'M' + KITE.map(pt).join('L') + 'Z M0 -13 L0 13 M-9 -2 L9 -2');
-      const tl: Vec[] = []; for (let i = 0; i <= 10; i++) tl.push([Math.sin(t * 2 + i * 0.7) * 3 * (i / 10), 13 + i * 3.2]);
+      const tl: Vec[] = []; for (let i = 0; i <= 10; i++) tl.push([Math.sin(t * 2 + i * .7) * 3 * (i / 10), 13 + i * 3.2]);
       tail.setAttribute('d', 'M' + tl.map(pt).join('L'));
     },
   };

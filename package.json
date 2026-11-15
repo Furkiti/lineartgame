@@ -9,7 +9,8 @@
     "build": "vite build",
     "preview": "vite preview --host",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
-    "test:play": "node tests/playthrough.cjs"
+    "test:play": "node tests/playthrough.cjs",
+    "test:ui": "node tests/interface.cjs"
   },
   "devDependencies": {
     "playwright": "^1.62.1",

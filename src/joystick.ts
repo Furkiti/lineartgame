@@ -3,7 +3,7 @@
 // follows the drag, and fades away as soon as you lift it.
 export function createJoystick(area: HTMLElement, base: HTMLElement, knob: HTMLElement) {
   const v = { x: 0, y: 0, active: false, touched: false };
-  let id: number | null = null, cx = 0, cy = 0;
+  let id: number | null = null, cx = 0, cy = 0, localX = 0, localY = 0;
   const R = () => base.offsetWidth * 0.38;
   const set = (e: PointerEvent) => {
     let dx = e.clientX - cx, dy = e.clientY - cy;
@@ -27,6 +27,7 @@ export function createJoystick(area: HTMLElement, base: HTMLElement, knob: HTMLE
     id = e.pointerId; cx = e.clientX; cy = e.clientY;
     try { area.setPointerCapture(id); } catch {}
     const a = area.getBoundingClientRect();
+    localX = cx - a.left; localY = cy - a.top;
     base.style.left = `${cx - a.left}px`;
     base.style.top = `${cy - a.top}px`;
     v.active = true; v.touched = true;
@@ -58,6 +59,7 @@ export function createJoystick(area: HTMLElement, base: HTMLElement, knob: HTMLE
       const k = keys.has('shift') ? 1 : 0.55; // shift to run
       return { x: (x / m) * k, y: (y / m) * k };
     },
+    get origin() { return { x: localX, y: localY }; },
     get touched() { return v.touched; },
     get active() { return v.active; },
   };

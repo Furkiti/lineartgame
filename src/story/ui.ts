@@ -18,6 +18,11 @@ export function createUI(svg: SVGSVGElement) {
   // ------------------------------------------------------------------ speech balloons
   type Balloon = { g: SVGGElement; at: Anchor; lines: SVGTextElement[]; full: string[]; t: number; dur: number; w: number; h: number; done: boolean };
   const balloons: Balloon[] = [];
+  let hintBalloon: Balloon | null = null;
+  function hint(at: Anchor, text: string | null, sticky = false) {
+    if (hintBalloon) { hintBalloon.g.remove(); const i = balloons.indexOf(hintBalloon); if (i >= 0) balloons.splice(i, 1); hintBalloon = null; }
+    if (text) { hintBalloon = say(at, text, sticky ? Infinity : Math.max(5, text.length * .075 + 1.6)); hintBalloon.g.setAttribute('data-world-hint', ''); }
+  }
   function wrap(s: string, max = 22) {
     const out: string[] = []; let line = '';
     for (const w of s.split(' ')) { if ((line + ' ' + w).trim().length > max && line) { out.push(line); line = w; } else line = (line + ' ' + w).trim(); }
@@ -26,7 +31,7 @@ export function createUI(svg: SVGSVGElement) {
   }
   function say(at: Anchor, text: string, dur = Math.max(2.6, text.length * 0.075 + 1.6)) {
     // one balloon per speaker: a new line replaces the old
-    balloons.filter((b) => b.at === at).forEach((b) => { b.t = Math.max(b.t, b.dur - 0.25); });
+    balloons.filter((b) => b !== hintBalloon && b.at === at).forEach((b) => { b.dur = Math.min(b.dur, b.t + .25); });
     const g = el('g', { opacity: 0 }, root);
     const body = el('path', { fill: PAPER, stroke: 'currentColor', 'stroke-width': 0.8, 'stroke-linejoin': 'round' }, g);
     const full = wrap(text);
@@ -48,6 +53,11 @@ export function createUI(svg: SVGSVGElement) {
   function drawBalloons(dt: number) {
     for (let i = balloons.length - 1; i >= 0; i--) {
       const b = balloons[i];
+      // Dialogue gets the reader's attention first; resume the route hint afterwards.
+      // Keeping its timer paused also protects short hints from disappearing unread.
+      if (b === hintBalloon && balloons.some(other => other !== b && other.t < other.dur)) {
+        b.g.setAttribute('opacity', '0'); continue;
+      }
       b.t += dt;
       const inT = clamp01(b.t / 0.28), outT = clamp01((b.t - (b.dur - 0.25)) / 0.25);
       const s = lerp(0.55, 1, backOut(inT)) * lerp(1, 0.9, outT);
@@ -65,40 +75,43 @@ export function createUI(svg: SVGSVGElement) {
   }
 
   // ------------------------------------------------------------------ the red guide crane
-  const crane = el('g', { opacity: 0 }, root);
+  const crane = el('g', { opacity: 0, 'data-companion': 'turna' }, root);
   const craneInner = el('g', {}, crane);
   const wingFar = el('path', { fill: '#a8352e', stroke: 'currentColor', 'stroke-width': 0.6, 'stroke-linejoin': 'round' }, craneInner);
   el('path', { d: 'M-7.4 -0.6 L0 -3 L8 -1.6 L0.6 2.6Z', fill: '#c8423a', stroke: 'currentColor', 'stroke-width': 0.6, 'stroke-linejoin': 'round' }, craneInner);
   el('path', { d: 'M5.6 -1.8 L10 -9 L12.6 -8.2 L10.4 -7.6 L7.6 -0.8Z M-6 -0.4 L-11.4 -6.4 L-3.6 -1.8Z', fill: '#c8423a', stroke: 'currentColor', 'stroke-width': 0.6, 'stroke-linejoin': 'round' }, craneInner);
   const wingNear = el('path', { fill: '#d4524a', stroke: 'currentColor', 'stroke-width': 0.6, 'stroke-linejoin': 'round' }, craneInner);
-  const cr = { on: false, target: null as Anchor | null, pos: [0, 0] as Vec, vel: [0, 0] as Vec, op: 0, face: 1, flap: 0, t: 0 };
-  function guide(target: Anchor | null) {
-    if (target && !cr.on) { cr.pos = [view.x + view.w * (target()[0] > view.x + view.w / 2 ? 0.1 : 0.9), view.y + view.h * 0.25]; cr.vel = [0, 0]; }
-    cr.on = !!target; cr.target = target;
-  }
+  // Screen coordinates keep a docked companion steady while the camera follows you.
+  // Its target is still a world anchor, so the same figure can fly into the scene.
+  const cr = { on: false, visible: false, initialized: false, target: null as Anchor | null, pos: [0, 0] as Vec, vel: [0, 0] as Vec, op: 0, face: 1, flap: 0, t: 0, dockDistance: 0 };
+  function guide(target: Anchor | null) { cr.on = !!target; cr.target = target; }
+  const toWorld = (p: Vec): Vec => [view.x + p[0] * k / 1.8, view.y + p[1] * k / 1.8];
   function drawCrane(dt: number) {
     cr.t += dt;
-    cr.op = approach(cr.op, cr.on ? 1 : 0, 4, dt);
+    const ppu = 1.8 / k, width = view.w * ppu, height = view.h * ppu;
+    const dock: Vec = [50, height - 56];
+    if (!cr.initialized) { cr.pos = [...dock]; cr.initialized = true; }
+    cr.op = approach(cr.op, cr.visible ? 1 : 0, 5, dt);
     crane.setAttribute('opacity', f(cr.op));
-    if (cr.op < 0.01 && !cr.on) return;
+    crane.setAttribute('data-guiding', String(cr.on));
+    cr.dockDistance = Math.hypot(cr.pos[0] - dock[0], cr.pos[1] - dock[1]);
+    crane.setAttribute('data-docked', String(!cr.on && cr.dockDistance < 12));
+    if (cr.op < .01 && !cr.visible) { cr.pos = [...dock]; cr.vel = [0, 0]; return; }
+    let want: Vec;
     if (cr.target) {
       const tg = cr.target();
-      // circle above the target; if it is off-screen, wait at the edge of the view, pointing
-      let want: Vec = [tg[0] + Math.cos(cr.t * 1.6) * 12, tg[1] - 16 + Math.sin(cr.t * 2.3) * 4];
-      const m = 14 * k;
-      const off = want[0] < view.x + m || want[0] > view.x + view.w - m;
-      if (off) want = [Math.max(view.x + m, Math.min(view.x + view.w - m, want[0])), Math.max(view.y + view.h * 0.3, Math.min(view.y + view.h * 0.7, want[1]))];
-      // a soft spring toward the spot
-      for (const i of [0, 1]) { cr.vel[i] += ((want[i] - cr.pos[i]) * 7 - cr.vel[i] * 3.4) * dt; cr.pos[i] += cr.vel[i] * dt; }
-      const dir = off ? (tg[0] > cr.pos[0] ? 1 : -1) : cr.vel[0] > 0.5 ? 1 : cr.vel[0] < -0.5 ? -1 : cr.face;
-      cr.face = approach(cr.face, dir, 6, dt);
-    }
-    cr.flap += dt * (5 + Math.min(8, Math.hypot(cr.vel[0], cr.vel[1]) * 0.08));
+      want = [(tg[0] - view.x) * ppu + Math.cos(cr.t * 1.6) * 5, (tg[1] - view.y) * ppu - 22 + Math.sin(cr.t * 2.3) * 3];
+      want = [Math.max(25, Math.min(width - 25, want[0])), Math.max(90, Math.min(height * .7, want[1]))];
+    } else want = [dock[0] + Math.sin(cr.t * .8) * 3, dock[1] + Math.sin(cr.t * 1.3) * 3];
+    for (const i of [0, 1]) { cr.vel[i] += ((want[i] - cr.pos[i]) * 7 - cr.vel[i] * 3.4) * dt; cr.pos[i] += cr.vel[i] * dt; }
+    const direction = Math.abs(cr.vel[0]) > 2 ? Math.sign(cr.vel[0]) : cr.face;
+    cr.face = approach(cr.face, direction, 6, dt);
+    cr.flap += dt * (cr.on || cr.dockDistance > 12 ? 7 : 2.2);
     const w = Math.sin(cr.flap);
-    wingFar.setAttribute('d', `M-2 -1.6 L3 -1.8 L${f(-2.4 + w * 0.6)} ${f(-10 * w - 2.4)}Z`);
+    wingFar.setAttribute('d', `M-2 -1.6 L3 -1.8 L${f(-2.4 + w * .6)} ${f(-10 * w - 2.4)}Z`);
     wingNear.setAttribute('d', `M-1.4 -1.2 L3.6 -1.4 L${f(1.2 - w)} ${f(-11 * w - 1.6)}Z`);
-    place(crane, cr.pos, 1);
-    craneInner.setAttribute('transform', `scale(${f(cr.face)} 1) rotate(${f(-cr.vel[1] * 0.08)})`);
+    place(crane, toWorld(cr.pos));
+    craneInner.setAttribute('transform', `scale(${f(cr.face)} 1) rotate(${f(-cr.vel[1] * .035)})`);
   }
 
   // ------------------------------------------------------------------ ghost hand: shows a gesture once
@@ -201,10 +214,12 @@ export function createUI(svg: SVGSVGElement) {
   }
 
   return {
-    root, say, guide, showGesture, hideGesture, stillness, heart, sparkle,
+    root, say, hint, guide,
+    companionVisible(show: boolean) { cr.visible = show; },
+    get companionDocked() { return !cr.on && cr.dockDistance < 12; }, showGesture, hideGesture, stillness, heart, sparkle,
     get guiding() { return cr.on; },
     /** where the guide crane is (for its own speech balloon) */
-    craneAt(): Vec { return [cr.pos[0], cr.pos[1] - 6]; },
+    craneAt(): Vec { const p = toWorld(cr.pos); return [p[0], p[1] - 6 * k]; },
     get speaking() { return balloons.length > 0; },
     /** call each frame: px per scene unit, and the visible rect */
     draw(dt: number, pxPerUnit: number, v: { x: number; y: number; w: number; h: number }) {
