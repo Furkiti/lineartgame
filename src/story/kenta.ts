@@ -104,8 +104,8 @@ const KITE: Vec[] = [[0, -13], [9, -2], [0, 13], [-9, -2]]; // a diamond, nose u
 
 export function createStuckKite(parent: Element, at: Vec) {
   const g = el('g', {}, parent);
-  const body = el('path', { fill: 'none', stroke: 'currentColor', 'stroke-width': 1.1, 'stroke-dasharray': '2.6 1.8', 'stroke-linejoin': 'round' }, g);
-  const tail = el('path', { fill: 'none', stroke: 'currentColor', 'stroke-width': 0.8, 'stroke-dasharray': '1.8 1.5' }, g);
+  const body = el('path', { fill: '#d76c46', stroke: 'currentColor', 'stroke-width': 1.1, 'stroke-linejoin': 'round' }, g);
+  const tail = el('path', { fill: 'none', stroke: 'currentColor', 'stroke-width': 0.8 }, g);
   let op = 1, gone = false, fall = 0;
   return {
     g, at,
@@ -141,10 +141,8 @@ export function createKite(parent: Element) {
      * becomes the sail; the spars run between its farthest points; the tail hangs from its lowest.
      */
     birth(points: Vec[]) {
-      let pts = points.slice();
-      // one round of corner-cutting keeps the shape but smooths the wobble of a thumb
-      const cut = (a: Vec[]) => { const o: Vec[] = []; for (let i = 0; i < a.length; i++) { const p = a[i], q = a[(i + 1) % a.length]; o.push([p[0] * 0.75 + q[0] * 0.25, p[1] * 0.75 + q[1] * 0.25], [p[0] * 0.25 + q[0] * 0.75, p[1] * 0.25 + q[1] * 0.75]); } return o; };
-      if (pts.length > 6) pts = cut(pts);
+      const pts = points.slice();
+      // Keep the player's contour, including its uneven corners.
       const cx = pts.reduce((s, p) => s + p[0], 0) / pts.length, cy = pts.reduce((s, p) => s + p[1], 0) / pts.length;
       const rel = pts.map((p) => [p[0] - cx, p[1] - cy] as Vec);
       body.setAttribute('d', 'M' + rel.map(pt).join('L') + 'Z');

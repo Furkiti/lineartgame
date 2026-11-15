@@ -145,7 +145,7 @@ function chochin(g, glowG, x, y, { r = 7, h = 16, label = '', red = false } = {}
 }
 
 // ------------------------------------------------------------------ the street
-export function buildStreet(layers, defs) {
+export function buildStreet(layers, defs, { treeOffset = 0 } = {}) {
   const { back, houses: hg, front, glow } = layers;
   const g = (parent) => el('g', {}, parent);
   const glowGrad = el('radialGradient', { id: 'v-warmglow' }, defs);
@@ -157,6 +157,7 @@ export function buildStreet(layers, defs) {
 
   // ---------- cherry tree behind the roofs (canopy rises above the alley)
   const tree = g(back);
+  tree.setAttribute('transform', `translate(${treeOffset} 0)`);
   P(tree, 'M452 344 Q450 300 446 268 Q440 236 420 214 M462 344 Q463 300 468 262 Q474 236 500 214 M447 262 Q458 248 456 226 Q455 206 462 192', SP * 1.1);
   P(tree, 'M430 224 l-10 -6 M490 222 l12 -4 M456 212 l-8 -10 M468 236 q10 -4 14 -12', SP * 0.7);
   const canopy = g(tree);
@@ -171,7 +172,7 @@ export function buildStreet(layers, defs) {
     const a = srnd(0, 6.28), d = Math.sqrt(srnd(0, 1));
     const [cx, cy, r] = [[458, 196, 54], [414, 210, 26], [502, 204, 28]][i % 3];
     const x = cx + Math.cos(a) * r * d * 0.95, y = cy + Math.sin(a) * r * 0.62 * d;
-    blossoms.push([x, y]);
+    blossoms.push([x + treeOffset, y]);
     const s = srnd(0.8, 1.3);
     fl.push(`M${f(x)} ${f(y - s)} l${f(s * 0.95)} ${f(s * 0.7)} l${f(-s * 0.4)} ${f(s * 1.1)} l${f(-s * 1.1)} 0 l${f(-s * 0.4)} ${f(-s * 1.1)}Z`);
   }

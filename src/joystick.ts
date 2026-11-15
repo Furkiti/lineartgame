@@ -22,7 +22,7 @@ export function createJoystick(area: HTMLElement, base: HTMLElement, knob: HTMLE
   area.addEventListener('pointerdown', (e) => {
     if (id !== null || area.classList.contains('modal-open') || area.classList.contains('controls-locked')) return;
     const t = e.target as Element;
-    if (t.closest?.('.drag, #clock, #win.show, button, .closeup, .brushpad, .defter, .choices, .letter, #opening, .shodo, .shodo-ui')) return; // sun/moon scrubbing and the win card keep their own touch
+    if (t.closest?.('.drag, .street-guide, #clock, #win.show, button, .closeup, .brushpad, .defter, .choices, .letter, #opening, .shodo, .shodo-ui')) return; // sun/moon scrubbing and the win card keep their own touch
     e.preventDefault();
     id = e.pointerId; cx = e.clientX; cy = e.clientY;
     try { area.setPointerCapture(id); } catch {}

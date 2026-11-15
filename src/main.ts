@@ -78,7 +78,7 @@ const sky = createSky(svg, skyL, defs, {
   onShoot: () => palette(tau).night > 0.4,
   draggable: !STORY, // in the story, time is not yours to push
 });
-const street = buildStreet({ back, houses, front, glow }, defs);
+const street = buildStreet({ back, houses, front, glow }, defs, { treeOffset: STORY ? -170 : 0 });
 const canal = buildCanal({ ground, canalL, willowL, glow }, defs);
 const smoke = createSmoke(back, street.chimney);
 const sparrows = createSparrows(birdsL, { wireY: street.wireY });
@@ -124,12 +124,13 @@ function addPerson(kind: 'kimono' | 'bike' | 'kid', x?: number) {
 }
 
 // ------------------------------------------------------------------ you, the cranes, the joystick
-const player = createPlayer(walkers, q.has('x') ? +q.get('x') : saved?.world.x ?? (STORY ? 335 : 200), saved?.world.y ?? 368);
+const player = createPlayer(walkers, q.has('x') ? +q.get('x') : saved?.world.x ?? (STORY ? 110 : 200), saved?.world.y ?? 368);
 const cranes = createCranes(walkers, shadowsL, glow);
 const stick = createJoystick(card, $('#stick'), $('#knob'));
 
 // ------------------------------------------------------------------ the bath house at the end of the street is home
 const home = buildHome(svg);
+home.walkExit = STORY;
 if (saved) { home.restore(saved.home); player.carryBundle = !home.bagHung; }
 const DOOR = { x: 457, w: 12 }; // the gate at the end of the middle alley
 // walking home means walking into the alley: up the stepping stones to the gate
@@ -143,6 +144,7 @@ function enter() {
   inside = true;
   [skyL, scene, glow, strokeL].forEach((n) => (n.style.display = 'none'));
   home.root.style.display = '';
+  home.onEnter();
   home.actors.appendChild(player.g);
   player.x = home.spawn.x; player.y = home.spawn.y; player.setHeading(Math.PI / 2);
   player.bounds = { ...home.bounds, y0: Y_MIN }; camSnap = true;
@@ -150,6 +152,8 @@ function enter() {
 }
 function exit() {
   inside = false;
+  home.doorTarget = 0; home.doorContact = false;
+  player.g.style.opacity = '1';
   [skyL, scene, glow, strokeL].forEach((n) => (n.style.display = ''));
   home.root.style.display = 'none';
   walkers.appendChild(player.g);
@@ -332,7 +336,8 @@ run((t, dt) => {
   tNow = t;
   let j = stick.read();
   const lock = inside ? home.lock : null;
-  if (pending || lock || story?.freeze || !opened) { j = { x: 0, y: 0 }; stick.reset(); }
+  if (pending || lock || story?.freeze || !opened) j = { x: 0, y: 0 };
+  if (pending || story?.freeze || !opened) stick.reset();
   if (lock) { const e = 1 - Math.exp(-dt * 10); player.x = lerp(player.x, lock.x, e); player.y = lerp(player.y, lock.y, e); }
   player.faceTo = lock ? lock.heading : null;
   player.pose = inside ? home.pose : { work: 0, chop: 0, hold: 0 };
@@ -345,11 +350,20 @@ run((t, dt) => {
     player.scale = 1 - alleyDepth * 0.3;
     if (player.y < ALLEY.enter && j.y < -0.2 && !pending && !story?.freeze) go(enter);
   } else player.scale = 1;
-  // inside: walk to the genkan door and keep going, and you are out
-  if (STORY && inside && !pending && !story?.freeze) {
-    const atGenkan = Math.abs(player.x - (home.spawn.x - 4)) < 22 && player.y <= Y_MIN + 1.5;
-    exitHold = atGenkan && j.y < -0.35 ? exitHold + dt : 0;
-    if (exitHold > 0.3 && !home.carrying && home.prep !== 1) { exitHold = 0; go(exit); }
+  // The genkan has real depth: approach, part the shoji, then cross its threshold.
+  if (STORY && inside) {
+    const aligned = Math.abs(player.x - (home.spawn.x - 4)) < 19;
+    const canLeave = !home.carrying && home.prep !== 1 && !home.busy && !story?.freeze;
+    const doorDepth = aligned ? clamp((365 - player.y) / 32, 0, 1) : 0;
+    home.doorTarget = canLeave ? doorDepth : 0;
+    home.doorContact = canLeave && doorDepth > .12 && doorDepth < .96;
+    player.bounds = { ...home.bounds, y0: canLeave && aligned ? 326 : Y_MIN };
+    if (player.y < Y_MIN && canLeave) player.bounds = { x0: home.spawn.x - 20, x1: home.spawn.x + 12, y0: 326 };
+    if (home.doorContact) player.faceTo = -Math.PI / 2;
+    player.scale = 1 - doorDepth * .12;
+    player.g.style.opacity = String(1 - clamp((345 - player.y) / 18, 0, .55));
+    exitHold = canLeave && aligned && player.y < 334 && j.y < -.2 && home.doorOpen > .94 ? exitHold + dt : 0;
+    if (exitHold > .12 && !pending) { exitHold = 0; go(exit); }
   }
   player.update(t, dt, j.x, j.y, P, wind);
   if (!STORY && stick.touched && t > hintUntil) hintN.classList.add('gone');
@@ -444,7 +458,7 @@ run((t, dt) => {
   cdCat -= dt; cdBirds -= dt; cdTree -= dt;
   if (cdCat < 0 && near(player.x, 548, 26, player.y, 352, 4)) { cat.poke(); cdCat = 12; }
   if (cdBirds < 0 && !inside && player.running > 0.6 && player.x > 520) { sparrows.flush(); cdBirds = 8; }
-  if (cdTree < 0 && player.running > 0.6 && player.x > 405 && player.x < 515 && player.y < 360) { shakeTree(24); cdTree = 7; }
+  if (cdTree < 0 && player.running > 0.6 && player.x > (STORY ? 235 : 405) && player.x < (STORY ? 345 : 515) && player.y < 360) { shakeTree(24); cdTree = 7; }
 
   // villagers
   if (!started) { started = true; addPerson('kimono', 520); addPerson('kimono', 860); addPerson('bike', 700); }

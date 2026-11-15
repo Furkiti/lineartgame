@@ -8,9 +8,11 @@
     "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview --host",
-    "test": "node --experimental-strip-types --test tests/*.test.ts"
+    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "test:play": "node tests/playthrough.cjs"
   },
   "devDependencies": {
+    "playwright": "^1.62.1",
     "typescript": "^5.9.3",
     "vite": "^7.1.9"
   }

@@ -145,10 +145,20 @@ export function buildHome(svg: SVGSVGElement) {
 
   // ------------------------------------------------------------------ genkan
   // the lattice door we came in by, the street light showing through it
-  const doorPane = el('path', { d: rect(16, 282, 64, BASE), fill: PAPER }, house);
-  const lat: string[] = [`M16 282 L64 282 L64 ${BASE} L16 ${BASE}Z`, `M40 282 L40 ${BASE}`, `M16 290 L64 290`];
-  for (let x = 18.5; x < 64; x += 2.5) if (Math.abs(x - 40) > 1) lat.push(`M${x} 290 L${x} ${BASE - 2}`);
-  P_(house, lat.join(' '), SP * 0.5);
+  const doorway = el('g', { 'data-door': 'genkan' }, house);
+  const doorGap = el('path', { d: rect(16, 282, 64, BASE), fill: '#4b5356' }, doorway);
+  const clipDoor = el('clipPath', { id: 'home-door-clip' }, svg);
+  el('rect', { x: 16, y: 282, width: 48, height: BASE - 282 }, clipDoor);
+  const sliding = el('g', { 'clip-path': 'url(#home-door-clip)' }, doorway);
+  const doorPanels = [16, 40].map(x0 => {
+    const panel = el('g', {}, sliding);
+    el('path', { d: rect(x0, 282, x0 + 24, BASE), fill: '#e8e3d4' }, panel);
+    const lat = [`M${x0} 282h24v${BASE - 282}h-24Z M${x0} 290h24`];
+    for (let x = x0 + 3; x < x0 + 24; x += 3) lat.push(`M${x} 290V${BASE - 2}`);
+    P_(panel, lat.join(' '), SP * .5);
+    P_(panel, `M${x0 + (x0 === 16 ? 20 : 4)} 316v9`, SP);
+    return panel;
+  });
   C_(house, rect(13, 278, 67, 282), rgb(COL.wood), SP * 0.7);
   // a short noren inside the door
   C_(house, `M18 283 L39 283 L38.6 296 L18.4 296.4Z M41 283 L62 283 L61.6 296.4 L41.4 296Z`, rgb(COL.indigo), SP * 0.6);
@@ -159,6 +169,9 @@ export function buildHome(svg: SVGSVGElement) {
   S_(house, rect(66, 332, 74, BASE), SP * 0.6);
   P_(house, 'M70 332 L71 300 M71 300 Q67 312 68 330 M71 300 Q75 312 73 330', SP * 0.6);
 
+  const bagSpot = el('g', { 'pointer-events': 'none' }, house);
+  el('ellipse', { cx: 72, cy: 357, rx: 14, ry: 3.4, fill: '#d9b66d', 'fill-opacity': .22, stroke: '#b64b3e', 'stroke-width': .7, 'stroke-dasharray': '2 2' }, bagSpot);
+  text(bagSpot, 72, 274, 'Bohça', 5.5);
   // ------------------------------------------------------------------ tatami room
   // tokonoma with a hanging scroll and a vase
   S_(house, rect(92, 254, 142, 334), SP * 0.8);
@@ -314,6 +327,10 @@ export function buildHome(svg: SVGSVGElement) {
     { label: 'Nigiri yap', dur: 1.6, chop: 0 },
     { label: 'Tabağa koy', dur: 1.0, chop: 0 },
   ];
+  const doorHands = inner();
+  const handArms = el('path', { fill: 'none', stroke: '#34507a', 'stroke-width': 2.8, 'stroke-linecap': 'round' }, doorHands);
+  const handDots = [0, 1].map(() => el('circle', { cy: 322, r: 1.4, fill: '#f7eddb', stroke: 'currentColor', 'stroke-width': .45 }, doorHands));
+  let doorOpen = 0, autoBagReady = true, bagGetArmed = false;
   let step = 0, anim = -1, eaten = 0, eatT = -1, made = 0, resetT = -1, futonOp = 0;
   // prep: the fish is 0 in the icebox · 1 in your hands · 2 on the board. iceT / placeT / bagT play those moves
   let prep = 0, iceT = -1, placeT = -1, bagT = -1, bagHung = false, bagDir: 'hang' | 'take' = 'hang', fishFrom: Vec = [0, 0];
@@ -325,6 +342,10 @@ export function buildHome(svg: SVGSVGElement) {
 
   const api = {
     root, actors,
+    doorTarget: 0, doorContact: false, walkExit: false,
+    get doorOpen() { return doorOpen; },
+    onEnter() { autoBagReady = !bagHung; bagGetArmed = bagHung; doorOpen = 0; api.doorTarget = 0; },
+    takePlate() { if (step === 4) { step = 5; top.appendChild(dish); } },
     bounds: { x0: IX + 14, x1: IX + IW - 14 },
     view: { x0: IX - 14, x1: IX + IW + 14 },
     spawn: { x: IX + 44, y: 356 },
@@ -361,13 +382,13 @@ export function buildHome(svg: SVGSVGElement) {
     prompt(pl: Player): string | null {
       if (busy()) return null;
       const w = where(pl);
-      if (w === 'door') return step === 5 || prep === 1 ? null : 'Dışarı çık';
-      if (w === 'peg') return pl.carryBundle ? 'Bohçayı as' : bagHung ? 'Bohçayı al' : null;
+      if (w === 'door') return api.walkExit || step === 5 || prep === 1 ? null : 'Dışarı çık';
+      if (w === 'peg') return !pl.carryBundle && bagHung && bagGetArmed ? 'Bohçayı al' : null;
       if (w === 'icebox') return prep === 0 && step === 0 ? 'Dolabı aç' : null;
-      if (w === 'cook' && prep === 1) return 'Balığı tezgâha koy';
+      if (w === 'cook' && prep === 1) return null;
       if (w === 'cook' && step < 4 && prep === 2) return step === 0 ? 'Suşi hazırla' : 'Suşiye devam et';
-      if (w === 'cook' && step === 4) return 'Tabağı al';
-      if (w === 'table' && step === 5) return 'Masaya koy';
+      if (w === 'cook' && step === 4) return null;
+      if (w === 'table' && step === 5) return null;
       if (w === 'table' && step === 6) return api.canEat ? `Ye · ${3 - eaten} kaldı` : 'Kenta akşam gelecek';
       if (w === 'futon' && api.canSleep && step !== 5) return 'Uyu';
       return null;
@@ -393,11 +414,34 @@ export function buildHome(svg: SVGSVGElement) {
     get made() { return made; },
 
     draw(t: number, dt: number, P: { inkT: number; lamp: number; paper: number[]; top: number[]; bot: number[] }, pl: Player) {
+      // Proximity completes physical carrying actions; explicit choices start activities.
+      if (!busy()) {
+        if (autoBagReady && pl.carryBundle && near(pl, SPOT.peg, 18)) {
+          autoBagReady = false; bagGetArmed = false; bagT = 0; bagDir = 'hang'; pl.carryBundle = false;
+        } else if (prep === 1 && near(pl, SPOT.cook, 24)) {
+          placeT = 0; fishFrom = [pl.hands[0] - IX, pl.hands[1]];
+        } else if (step === 4 && near(pl, SPOT.cook, 26)) api.takePlate();
+        else if (step === 5 && near(pl, SPOT.table, 27)) {
+          step = 6; props.appendChild(dish); say('itadakimasu', [TABLE_TOP[0], TABLE_TOP[1] - 34]);
+        }
+      }
+      if (bagHung && Math.abs(pl.x - IX - SPOT.peg) > 26) bagGetArmed = true;
+      doorHands.setAttribute('opacity', api.doorContact && doorOpen < .72 ? '1' : '0');
+      if (api.doorContact) {
+        const x = pl.x - IX, shoulderY = pl.y - 35;
+        const reach = 6 + doorOpen * 14;
+        handArms.setAttribute('d', `M${f(x - 3)} ${f(shoulderY)}Q${f(x - 7)} ${f(shoulderY + 7)} ${f(40 - reach)} 322 M${f(x + 3)} ${f(shoulderY)}Q${f(x + 7)} ${f(shoulderY + 7)} ${f(40 + reach)} 322`);
+        handDots.forEach((dot, i) => dot.setAttribute('cx', f(40 + (i ? 1 : -1) * reach)));
+      }
+      bagSpot.setAttribute('opacity', f(autoBagReady && pl.carryBundle ? .45 + Math.sin(t * 2) * .14 : 0));
       // colours of the hour
       const lit = smooth(0.08, 0.3, P.lamp);
       const outside = rgb(mix(P.bot, P.top, 0.35));
       windowPane.setAttribute('fill', rgb(mix(mix(P.bot, P.top, 0.35), COL.warm, lit * 0.25)));
-      doorPane.setAttribute('fill', outside);
+      doorOpen += (api.doorTarget - doorOpen) * Math.min(1, dt * 7);
+      doorGap.setAttribute('fill', outside);
+      doorPanels.forEach((panel, i) => panel.setAttribute('transform', `translate(${f((i ? 1 : -1) * doorOpen * 25)} 0)`));
+      doorway.setAttribute('data-open', f(doorOpen));
       lampShade.setAttribute('fill', rgb(mix(P.paper, COL.warm, lit * 0.95)));
       bulb.setAttribute('fill', rgb(mix(P.paper, hex('#fff1c9'), lit)));
       glows.forEach((g, i) => g.setAttribute('opacity', f(lit * (i ? 0.75 : 0.95) * (0.94 + 0.06 * Math.sin(t * 5.3 + i)))));
@@ -541,6 +585,7 @@ export function buildHome(svg: SVGSVGElement) {
 
       // the figure's arms
       api.pose.work = anim >= 0 || (iceT >= 0 && iceT < 1.0) || bagT >= 0 || placeT >= 0 ? 1 : 0;
+      if (api.doorContact) api.pose.work = Math.max(api.pose.work, .7);
       api.pose.chop = step === 1 && anim >= 0 ? 1 : 0;
       api.pose.hold = step === 5 || (prep === 1 && placeT < 0 && !(iceT >= 0 && iceT < 1.0)) ? 1 : 0;
 

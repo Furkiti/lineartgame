@@ -1,7 +1,7 @@
 # Mürekkep Sokağı (lineartgame)
 
 Mürekkeple çizilmiş bir Japon sokağında joystick ile yürüdüğün küçük bir mobil web oyunu.
-İlk çizgilerle kendi yolcunu oluştur; başın, ceketindeki işaret ve mührün sana ait olsun.
+Turna ile tanış, mahalleyi görerek yürümeyi öğren ve ağacın yanındaki Kenta ile karşılaş.
 Ekranda bir yere basıp sürükle; joystick parmağının altında çıkar. Gün kendiliğinden
 akşama, akşam geceye döner. Yanından geçtiğin insanlar selam verir, kedi uyanır,
 telin altında koşarsan serçeler kaçar. Çizdiklerin ve seçimlerin tarayıcıda kaydedilir.
@@ -49,9 +49,9 @@ Build command: `npm run build` · Build output directory: `dist`.
 
 Deneme sürümü: https://furkiti.github.io/lineartgame/playtest/
 
-- Başlangıçta başını, gövdeni ve mührünü çiz. Baş çizgin karakterinde, gövde çizimin ceketinin arkasında, mührün ceketinde ve defterinde kalır; portren evde asılır.
-- Birkaç adım sonra Kenta karşılaşması kendiliğinden başlar. Çizimler sokaktan ayrılan sade bir kâğıtta yapılır; örnekten yardım almak mümkündür.
-- Turna düğmesi isteğe bağlı yön gösterir. İlk günün öğreticisi bitene kadar zaman bekler; çizim ve yemek yakın planında yavaşlar, defterde ve arka planda durur.
+- Karakter oluşturma kaldırıldı. Turnanın yanındaki öğretici sen dokunana kadar bekler; Kenta ve ev arasında da yürüyerek keşfedeceğin mesafe vardır.
+- Kenta’ya yaklaşınca karşılaşma başlar. Uçurtmayı doğrudan sahnedeki açık alana çizersin; biçimi değişmeden canlanır. Davetin yazısı bittikten sonra seçenekler gelir. Kenta uçurtmasıyla uzaklaşınca Ev işareti yanar.
+- Sol altta dolaşan origami turnaya dokunmak isteğe bağlı yön gösterir; görünür bir düğme yüzeyi yoktur. İlk günün öğreticisi bitene kadar zaman bekler; çizim ve yemek yakın planında yavaşlar, defterde ve arka planda durur.
 - Davet edilen Kenta akşam gelir, kapıda bekler; çok geç kalırsan not bırakır. Başka akşam yeniden davet edilebilir. Erken hazırlanan sofra Kenta gelene kadar kalır.
 - İkinci gün kaligrafi siparişi, kalıcı tabela, dört sikke ve seçilebilir minder/su kabı açılır. Cebinden iki sikkeye rüzgâr çanı alabilirsin.
 - Üçüncü gün yağmur, çay köşesi/fener masası seçimi, kendi deseninle ortak alan ve akşam buluşması açılır. Köşe ile çizimler sonraki günlerde kalır.
@@ -60,3 +60,16 @@ Deneme sürümü: https://furkiti.github.io/lineartgame/playtest/
 `npm test` (Node 22.6+) zaman/randevu sınırlarını ve kayıt hata durumlarını sınar. `npx tsc --noEmit` tür kontrolünü yapar.
 
 Kayıt modülü: `src/story/save.ts`; zaman/randevu kuralları: `src/story/schedule.ts`; odaklı çizim yüzeyi: `src/story/paper.ts`.
+
+## İlk gün etkileşimleri
+
+Bilinçli başlatılanlar: dolabı açmak, suşiye başlamak, yemek yemek, uyumak ve diyalog seçimleri.
+Yaklaşınca tamamlananlar: askıda bohçayı bırakmak, balığı tezgâha koymak, hazır tabağı almak ve masaya bırakmak.
+Kapıya yürümek sürgüleri kademeli açar; geri çekilmek kapatır. Eşiği geçmek dışarı çıkarır.
+Pirinç gerçek dairesel hareketlerle karıştırılır. Balık herhangi bir yerden aşağı kaydırarak dilimlenir; pirinç herhangi bir yere dokunarak/basılı tutarak şekillendirilir; tabağa dizmek için boş alana dokunmak veya sürüklemek kullanılabilir.
+
+## Baştan sona oynanış kontrolü
+
+`npm run test:play` mobil boyutta gerçek klavye/fare girdileriyle açılışı, turnayı, uçurtma çizimini, daveti, eve yürüyüşü, kapıdan geri çekilmeyi ve mutfaktan akşam yemeğine kadar akışı oynar. Oyuncu konumunu veya hikâye durumunu atlayarak değiştirmez.
+
+Önce `npx playwright install chromium` çalıştır; `npm run build` sonrasında ayrı terminalde `npm run preview -- --port 4173` başlat. Ardından `npm run test:play` çalıştır. Ekran görüntüleri `.local/` içine yazılır. Video için `npx playwright install ffmpeg` ve `RECORD_PLAYTHROUGH=1 npm run test:play` kullanılabilir. Farklı adres için `PLAYTEST_URL`, sistem Chromium'u için `CHROMIUM_PATH` belirtilebilir.

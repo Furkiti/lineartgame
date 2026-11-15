@@ -17,7 +17,7 @@ function mk<K extends keyof SVGElementTagNameMap>(tag: K, a: Attrs = {}, parent?
   parent?.appendChild(n);
   return n;
 }
-const INK = 'currentColor', PAPER = 'var(--paper)';
+const INK = 'currentColor', PAPER = '#fff9ed';
 const ink = (g: Element, d: string, w = 1.6, extra: Attrs = {}) => mk('path', { d, fill: 'none', stroke: INK, 'stroke-width': w, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', ...extra }, g);
 const fill = (g: Element, d: string, c: string, w = 1.8, extra: Attrs = {}) => mk('path', { d, fill: c, stroke: INK, 'stroke-width': w, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', ...extra }, g);
 const ell = (cx: number, cy: number, rx: number, ry: number) => `M${f(cx - rx)} ${f(cy)} A${f(rx)} ${f(ry)} 0 1 0 ${f(cx + rx)} ${f(cy)} A${f(rx)} ${f(ry)} 0 1 0 ${f(cx - rx)} ${f(cy)}Z`;
@@ -27,7 +27,7 @@ const C = {
   sleeve: hex('#34507a'), skin: hex('#f6e8d6'), geta: hex('#c79a64'), ginger: hex('#f2b3b0'), leaf: hex('#6e9a4e'), red: hex('#c8423a'),
 };
 type Pal = { inkT: number };
-const tint = (c: number[], P: Pal, k = 0.5) => rgb(mix(c, mix(c, [12, 16, 30], 0.6), P.inkT * k));
+const tint = (c: number[], P: Pal, k = 0.5) => rgb(mix(c, mix(c, [12, 16, 30], 0.6), Math.min(.22, P.inkT * k)));
 
 // stations: what the camera frames for each step
 const ST = {
@@ -217,7 +217,7 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit }: { o
   const after = (s: number, fn: () => void) => later.push({ at: now + s, fn });
 
   const STEP_TITLES = ['Pirinci karıştır', 'Balığı dilimle', 'Nigiri şekillendir', 'Tabağa diz'];
-  const STEP_TIPS = ['Kapta parmağınla yavaş daireler çiz.', 'Kesik çizgi boyunca aşağı kaydır.', 'Pirincin üstüne basılı tut.', 'Nigirileri tabağa sürükle.'];
+  const STEP_TIPS = ['Kapta parmağınla yavaş daireler çiz.', 'Ekranın herhangi bir yerinde aşağı kaydır.', 'İstediğin yere dokun ya da basılı tut; ellerin şekillendirsin.', 'İstediğin yere dokun; sıradaki nigiri tabağa geçsin.'];
   function frameTo(r: readonly number[], instant = false) {
     camFrom = { ...cam }; camTo = { x0: r[0], y0: r[1], x1: r[2], y1: r[3] }; camT = instant ? 1 : 0;
     if (instant) cam = { ...camTo };
@@ -226,8 +226,8 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit }: { o
     step = n; stepT = 0; idle = 0; tipT = 0;
     title.innerHTML = n < 4 ? `<span>${n + 1} / 4</span> ${STEP_TITLES[n]}` : '';
     title.classList.remove('show'); void title.offsetWidth; title.classList.add('show');
-    frameTo(n === 0 ? ST.tub : ST.board, instant);
-    ghost = null;
+    frameTo(n === 0 ? ST.tub : n === 3 ? ST.plate : ST.board, instant);
+    ghost = null; tip.classList.remove('show');
   }
   const blockX0 = () => BLOCK.x0 + cuts * BLOCK.slice;
   function teach() {
@@ -238,15 +238,23 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit }: { o
   }
 
   // ------------------------------------------------------------------ input
+  let pressStart: Vec = [0, 0];
   const toWorld = (e: PointerEvent): Vec => { const r = svg.getBoundingClientRect(); return [(e.clientX - r.left - ox) / scale, (e.clientY - r.top - oy) / scale]; };
   svg.addEventListener('pointerdown', (e) => {
-    if (!open || doneT >= 0) return;
+    if (!open || doneT >= 0 || fingerDown) return;
     e.preventDefault(); svg.setPointerCapture(e.pointerId);
-    const p = toWorld(e); finger = p; fingerDown = true; lastPt = p; lastMoveT = now; idle = 0; ghost = null;
+    const p = toWorld(e); finger = p; pressStart = p; fingerDown = true; lastPt = p; lastMoveT = now; idle = 0; ghost = null;
     if (step === 0) lastAng = Math.atan2((p[1] - TUB[1]) / 0.42, p[0] - TUB[0]);
-    if (step === 1 && cuts < 3 && Math.abs(p[0] - (blockX0() + BLOCK.slice)) < 70 && p[1] < BLOCK.y1 + 20) { cutting = true; cutStartY = p[1]; knifeY = 0; }
-    if (step === 2) { const i = nigiri.findIndex((n, k) => n.shape < 1 && Math.hypot(p[0] - MOUND[k][0], p[1] - MOUND[k][1] + 10) < 34); if (i >= 0) { holdI = i; holdT = 0; } }
-    if (step === 3) { const i = nigiri.findIndex((n) => n.slot < 0 && Math.hypot(p[0] - n.pos[0], p[1] - n.pos[1] + 10) < 30); if (i >= 0) { drag = { i, off: [nigiri[i].pos[0] - p[0], nigiri[i].pos[1] - p[1]] }; sfx.tap(); haptic(6); } }
+    if (step === 1 && cuts < 3) { cutting = true; cutStartY = p[1]; knifeY = 0; }
+    if (step === 2) {
+      const i = nigiri.findIndex(n => n.shape < 1);
+      if (i >= 0) { holdI = i; holdT = 0; nigiri[i].shape = Math.min(1, nigiri[i].shape + .22); if (nigiri[i].shape >= 1) { nigiri[i].drape = 0; holdI = -1; sfx.chime(); } }
+    }
+    if (step === 3) {
+      const hit = nigiri.findIndex(n => n.slot < 0 && Math.hypot(p[0] - n.pos[0], p[1] - n.pos[1] + 10) < 30);
+      const i = hit >= 0 ? hit : nigiri.findIndex(n => n.slot < 0);
+      if (i >= 0) { drag = { i, off: [nigiri[i].pos[0] - p[0], nigiri[i].pos[1] - p[1]] }; sfx.tap(); haptic(6); }
+    }
   });
   svg.addEventListener('pointermove', (e) => {
     if (!fingerDown) return;
@@ -274,11 +282,12 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit }: { o
     if (step === 1 && cutting) { cutting = false; if (knifeY < BLOCK.y1 - BLOCK.y0 + 6 && cutVel > 600) knifeY = 999; else if (knifeY < BLOCK.y1 - BLOCK.y0 + 6) knifeY = 0; }
     if (step === 3 && drag) {
       const n = nigiri[drag.i];
-      if (n.pos[0] > 450 && n.pos[0] < 630 && n.pos[1] > 140 && n.pos[1] < 250) { n.slot = plated++; n.plated = 0; sfx.press(); haptic(10); }
+      if ((finger && Math.hypot(finger[0] - pressStart[0], finger[1] - pressStart[1]) < 12) || (n.pos[0] > 450 && n.pos[0] < 630 && n.pos[1] > 140 && n.pos[1] < 250)) { n.slot = plated++; n.plated = 0; sfx.press(); haptic(10); }
       drag = null;
     }
   };
   svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
+  addEventListener('blur', up);
   back.addEventListener('click', () => { if (open) api.close(); });
 
   // ------------------------------------------------------------------ api
@@ -299,10 +308,10 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit }: { o
       if (from < 2) nigiri.forEach((n) => { n.shape = 0; n.drape = -1; });
       plated = 0; slices.forEach((s, i) => { s.t = cuts > i ? 9 : -1; });
       setStep(from, true);
-      frameTo(ST.all, true); frameTo(from === 0 ? ST.tub : ST.board);
+      frameTo(ST.all, true); frameTo(from === 0 ? ST.tub : from === 3 ? ST.plate : ST.board);
       op = 0;
     },
-    close() { open = false; svg.classList.remove('show'); back.classList.remove('show'); title.classList.remove('show'); tip.classList.remove('show'); onExit(); },
+    close() { open = false; fingerDown = false; holdI = -1; drag = null; later.length = 0; svg.classList.remove('show'); back.classList.remove('show'); title.classList.remove('show'); tip.classList.remove('show'); onExit(); },
     draw(t: number, dt: number, P: Pal) {
       now = t;
       for (let i = later.length - 1; i >= 0; i--) if (now >= later[i].at) { const fn = later[i].fn; later.splice(i, 1); fn(); }
@@ -310,15 +319,8 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit }: { o
       if (!open && op < 0.01) return;
       // camera: ease between stations, fit to the card
       camT = Math.min(1, camT + dt / 0.9);
-      if (step === 3 && doneT < 0 && camT >= 1) {
-        // plating: the camera drifts after the piece you carry, toward the geta
-        const lead = drag ? Math.max(327, Math.min(541, nigiri[drag.i].pos[0] + 50)) : plated >= 3 ? 541 : 327;
-        const half = (ST.board[2] - ST.board[0]) / 2;
-        cam = { x0: approach(cam.x0, lead - half, 4, dt), x1: approach(cam.x1, lead + half, 4, dt), y0: approach(cam.y0, ST.board[1], 4, dt), y1: approach(cam.y1, ST.board[3], 4, dt) };
-      } else {
-        const e = easeInOut(camT);
-        cam = { x0: lerp(camFrom.x0, camTo.x0, e), y0: lerp(camFrom.y0, camTo.y0, e), x1: lerp(camFrom.x1, camTo.x1, e), y1: lerp(camFrom.y1, camTo.y1, e) };
-      }
+      const e = easeInOut(camT);
+      cam = { x0: lerp(camFrom.x0, camTo.x0, e), y0: lerp(camFrom.y0, camTo.y0, e), x1: lerp(camFrom.x1, camTo.x1, e), y1: lerp(camFrom.y1, camTo.y1, e) };
       const r = svg.getBoundingClientRect();
       const pad = 22, top = 70, bottom = 70;
       scale = Math.min((r.width - pad * 2) / (cam.x1 - cam.x0), (r.height - top - bottom) / (cam.y1 - cam.y0));
@@ -413,6 +415,7 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit }: { o
       });
 
       // ---------------- 3 · shaping
+      if (fingerDown && step === 2 && holdI < 0) holdI = nigiri.findIndex(n => n.shape < 1);
       if (holdI >= 0 && fingerDown && step === 2) {
         holdT += dt; pressPh += dt * 5.5;
         const n = nigiri[holdI];
