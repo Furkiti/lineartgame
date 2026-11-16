@@ -61,18 +61,25 @@ async function settle(){
   await p.screenshot({path:'.local/v6-ui-day-and-place.png'});
   await step(3);await p.waitForTimeout(500);
   assert.equal(await p.evaluate(()=>window.__game.story.mode),'walk');
+  assert.equal(await p.locator('[data-companion]').getAttribute('opacity'),'0','the crane has not met you yet');
+  await step(2.2);
   const hand=await p.locator('[data-gesture-hand]').boundingBox();
   assert(hand.y>844*.73,'walking demonstration stays by the thumb');
-  await p.screenshot({path:'.local/v6-ui-walking-first.png'});
-  await d.drive(0,-1);await step(2.1);await d.drive(0,0);
-  await step(1);
-  assert.equal(await p.locator('[data-companion]').count(),1);
-  assert.equal(await p.locator('[data-companion]').getAttribute('data-guiding'),'true');
-  assert((await p.locator('svg.village').textContent()).includes('Ben Turna.'));
-  await step(8);
+  assert.equal(await p.locator('[data-world-hint][data-balloon=thought]').count(),1,'the walking hint is a thought, not a sign');
+  await p.screenshot({path:'.local/v7-ui-walking-first.png'});
+  const modes=new Set();
+  await d.drive(-1,0);for(let i=0;i<6;i++){await step(.25);modes.add(await p.evaluate(()=>window.__game.story.mode));}await d.drive(0,0);
+  let sawTurna=false;
+  for(let i=0;i<40&&!(await p.evaluate(()=>window.__game.story._dbg.q.guideMet));i++){
+    await step(.25);modes.add(await p.evaluate(()=>window.__game.story.mode));
+    if((await p.locator('svg.village').textContent()).includes('Ben Turna.')){if(!sawTurna)await p.screenshot({path:'.local/v7-ui-turna-hello.png'});sawTurna=true;}
+  }
+  assert.deepEqual([...modes],['walk'],'the opening never takes the controls away');
+  assert(sawTurna,'the crane says hello on the way');
   assert.equal(await p.evaluate(()=>window.__game.story._dbg.q.guideMet),true);
-  await p.waitForTimeout(500);
-  await p.screenshot({path:'.local/v6-ui-turna-return.png'});
+  for(let i=0;i<16&&(await p.locator('[data-companion]').getAttribute('data-docked'))!=='true';i++)await step(.25);
+  assert.equal(await p.locator('[data-companion]').getAttribute('data-docked'),'true','then it settles in its corner');
+  await p.screenshot({path:'.local/v7-ui-turna-return.png'});
   assert.deepEqual(d.errors,[]);
   console.log('PASS day/place card → walking lesson → automatic single-crane introduction');
 
@@ -231,7 +238,7 @@ async function settle(){
     await p.evaluate(() => window.__game.story._dbg.closeup.isOpen),
     true,
   );
-  await p.locator('[data-pattern=triangle]').tap();await step(1);
+  assert.equal(await p.locator('[data-pattern]').count(),0,'the plate layout is shown, not chosen');
   const foodBox=await p.locator('[data-nigiri="0"]').boundingBox();
   assert(foodBox.width>55,'plating view keeps the nigiri large enough to arrange');
   for (let i = 0; i < 3; i++) {
@@ -244,15 +251,22 @@ async function settle(){
     await d.drag(...pts);
     await step(0.7);
   }
+  // what you plated stays visible on the geta (not hidden behind it)
+  const onTop = await p.evaluate(() => {
+    const c = window.__game.story._dbg.closeup;
+    return c._plating.slots.map(([x, y]) => { const [cx, cy] = c._client([x, y - 8]); return !!document.elementFromPoint(cx, cy)?.closest('[data-nigiri]'); });
+  });
+  assert.deepEqual(onTop, [true, true, true], 'plated nigiri are drawn over the geta');
+  await p.screenshot({ path: '.local/v7-plated.png' });
   await p.locator(".cu-serve.show").tap();
   await step(4);
   assert.equal(
     await p.evaluate(() => window.__game.story._dbg.closeup.isOpen),
     false,
   );
-  assert.equal(await p.evaluate(()=>window.__game.home.plateLayout),'triangle');
+  assert.equal(await p.evaluate(()=>window.__game.home.plateLayout),'row');
   console.log(
-    "PASS progressive cutting, hold/release shaping, close-view drag plating and retained triangular layout",
+    "PASS progressive cutting, hold/release shaping, close-view drag plating onto a shown layout, nigiri visible on the geta",
   );
 
   p = await stage(

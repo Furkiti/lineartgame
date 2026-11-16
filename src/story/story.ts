@@ -354,12 +354,11 @@ export function createStory(o: {
   const playerHead = (): Vec => [player.x, player.y - 50];
   const kentaHead = (): Vec => [kenta.head[0], kenta.head[1] - 6];
   const guestHead = (): Vec => guest ? [guest.head[0], guest.head[1] - 6] : [0, 0];
-  const think = (s: string, d?: number) => ui.say(playerHead, `(${s})`, d);
+  const think = (s: string, d?: number) => ui.say(playerHead, s, d, 'thought');
   const hanaHead = (): Vec => hana.head;
   function* sayLine(at: () => Vec, text: string): Scene {
-    const duration = .12 + text.length / 34 + Math.max(1.2, text.length * .022);
-    const b = ui.say(at, text, duration);
-    yield () => b.t >= duration;
+    const b = ui.say(at, text);
+    yield () => b.t >= b.dur - .3;
   }
   const handwork = createHandwork(card, () => { mode = 'walk'; cam = null; focusOn = null; script = null; });
   const catHead = (): Vec => [CAT[0], CAT[1] - 14];
@@ -374,6 +373,28 @@ export function createStory(o: {
   const arrival = document.createElement('div'); arrival.className = 'arrival-card';
   arrival.innerHTML = '<small>1. gün</small><h1>Mürekkep Sokağı</h1><i aria-hidden="true"></i>';
   card.appendChild(arrival);
+  // The first minute teaches by letting you play. Nothing ever stops your feet: the hint only
+  // comes if you wait, it leaves as soon as you walk, and the crane meets you on the way.
+  // Three openings can be tried side by side: ?ogretici=akis (default) | sessiz | turna.
+  const lesson = (() => { const v = new URLSearchParams(location.search).get('ogretici'); return v === 'sessiz' || v === 'turna' ? v : 'akis'; })();
+  let craneOut = q.guideMet;
+  function* walkLesson(hintText: string | null, idleBefore: number): Scene {
+    let last: Vec = [player.x, player.y], walked = 0, movingFor = 0, idle = 0, shown = false;
+    yield () => {
+      walked += Math.hypot(player.x - last[0], player.y - last[1]); last = [player.x, player.y];
+      if (player.moving > .2) movingFor += ctx.dt; else if (!ctx.stickActive) idle += ctx.dt;
+      if (!shown && walked < 4 && idle > idleBefore) { shown = true; ui.showWalkingGesture(); if (hintText) env.tip(hintText, true); }
+      // Loops count too; pushing against the pavement edge must not trap the first lesson.
+      return walked > 22 || walked > 8 && movingFor > 1.4;
+    };
+    q.walkLearned = true; ui.hideGesture(); if (shown) env.tip(null);
+  }
+  const nearFirstMeeting = () => Math.abs(player.x - kenta.x) < 70;
+  function* craneLine(text: string): Scene {
+    if (nearFirstMeeting()) return;
+    const b = ui.say(ui.craneAt, text);
+    yield () => b.t >= b.dur - .3 || nearFirstMeeting();
+  }
   function* intro(): Scene {
     mode = 'intro';
     yield () => env.isOpened();
@@ -382,21 +403,31 @@ export function createStory(o: {
     arrival.classList.remove('show');
     q.created = true;
     mode = 'walk'; cam = null;
-    env.tip('Ekranın altına basıp sürükle. Her yöne yürüyebilirsin.', true);
-    ui.showWalkingGesture();
-    let last: Vec=[player.x,player.y], walked=0, movingFor=0;
-    yield () => {
-      walked+=Math.hypot(player.x-last[0],player.y-last[1]);last=[player.x,player.y];
-      if(player.moving>.2)movingFor+=ctx.dt;
-      // Loops count too; pushing against the pavement edge must not trap the first lesson.
-      return walked>26 || walked>8&&movingFor>1.6;
-    };
-    q.walkLearned = true; ui.hideGesture(); env.tip(null);
-    mode = 'intro'; ui.guide(() => [player.x + 16, player.y - 43]);
-    yield .75;
-    yield* sayLine(ui.craneAt, 'Ben Turna. Yön ararsan sol altta beni bulabilirsin.');
-    ui.guide(null); q.guideMet = true; mode = 'walk';
-    env.tip('Mahalleye bir bakalım. Fırçan da yanında.', false);
+    yield .5;
+    const beside = () => [player.x + 18, player.y - 44] as Vec;
+    if (lesson === 'turna') {
+      craneOut = true; ui.companionArrive(); ui.guide(beside);
+      yield 1.1;
+      yield* craneLine('Günaydın! Ben Turna.');
+      if (!q.walkLearned) { const b = ui.say(ui.craneAt, 'Parmağını ekranda kaydır; birlikte yürüyelim.', Infinity); ui.showWalkingGesture(); yield* walkLesson(null, 99); b.dur = Math.min(b.dur, b.t + .3); }
+      yield .4;
+      yield* craneLine('İşte böyle. Acelemiz yok.');
+      yield* craneLine('Yolunu ararsan köşede beklerim.');
+    } else {
+      yield* walkLesson(lesson === 'sessiz' ? null : 'Parmağını ekranda kaydır. Acele yok.', lesson === 'sessiz' ? 2.6 : 1.8);
+      // a few easy steps of your own before anyone says hello
+      let strolled = 0;
+      yield () => { strolled += ctx.dt * (player.moving > .2 ? 1 : .35); return strolled > 1.6 || nearFirstMeeting(); };
+      craneOut = true; ui.companionArrive(); ui.guide(beside);
+      yield () => ui.craneAt()[1] > player.y - 75 || nearFirstMeeting();
+      yield .3;
+      if (lesson === 'sessiz') { ui.heart([player.x + 18, player.y - 52]); sfx.chime(); yield 1.4; }
+      else {
+        yield* craneLine('Günaydın! Ben Turna.');
+        yield* craneLine('Yolunu ararsan köşede beklerim.');
+      }
+    }
+    ui.guide(null); q.guideMet = true; q.walkLearned = true; ui.hideGesture();
   }
 
   function* talk(): Scene {
@@ -1144,7 +1175,7 @@ export function createStory(o: {
       card.classList.toggle('modal-open', paper.isOpen || notebook.isOpen || mode === 'desk' || mode === 'craft' || closeup.isOpen || !!env.localModal?.());
       syncControls();
       if (guideUntil > 0 && t > guideUntil) { ui.guide(null); guideCaption(null); guideUntil = 0; }
-      ui.companionVisible(env.isOpened() && !arrival.classList.contains('show') && !paper.isOpen && !notebook.isOpen && !closeup.isOpen && !env.localModal?.() && mode !== 'desk' && mode !== 'craft' && mode !== 'brush');
+      ui.companionVisible(craneOut && env.isOpened() && !arrival.classList.contains('show') && !paper.isOpen && !notebook.isOpen && !closeup.isOpen && !env.localModal?.() && mode !== 'desk' && mode !== 'craft' && mode !== 'brush');
       help.hidden = !env.isOpened() || !q.guideMet || mode !== 'walk' || !ui.companionDocked || !!env.localModal?.();
       if (mode === 'walk' && !script && q.walkLearned && !q.met && !c.inside && !c.fair && Math.abs(player.x - kenta.x) < 30) run(talk());
       refreshObjective();

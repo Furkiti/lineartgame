@@ -16,12 +16,17 @@ export function createUI(svg: SVGSVGElement) {
   const place = (g: Element, p: Vec, s = 1, rot = 0) => g.setAttribute('transform', `translate(${f(p[0])} ${f(p[1])}) scale(${f(s * k)})${rot ? ` rotate(${f(rot)})` : ''}`);
 
   // ------------------------------------------------------------------ speech balloons
-  type Balloon = { g: SVGGElement; at: Anchor; lines: SVGTextElement[]; full: string[]; t: number; dur: number; w: number; h: number; done: boolean; instruction: boolean };
+  // One hand for every line in the game: italic serif on a paper balloon. People speak through
+  // a tail; the traveller's thoughts (and the gentle "what now") rise in a cloud with two little
+  // bubbles. Words arrive one by one like ink soaking into paper: each word blooms from a pale
+  // wash, settles a hair downward, and longer words and punctuation take their own breath.
+  type Word = { n: SVGTSpanElement; at: number; done: boolean };
+  type Balloon = { g: SVGGElement; at: Anchor; words: Word[]; full: string[]; t: number; dur: number; w: number; h: number; reveal: number; thought: boolean; settled: boolean };
   const balloons: Balloon[] = [];
   let hintBalloon: Balloon | null = null;
   function hint(at: Anchor, text: string | null, sticky = false) {
-    if (hintBalloon) { hintBalloon.g.remove(); const i = balloons.indexOf(hintBalloon); if (i >= 0) balloons.splice(i, 1); hintBalloon = null; }
-    if (text) { hintBalloon = say(at, text, sticky ? Infinity : Math.max(7, text.length * .09 + 2), true); hintBalloon.g.setAttribute('data-world-hint', ''); }
+    if (hintBalloon) { const old = hintBalloon; old.dur = Math.min(old.dur, old.t + .25); hintBalloon = null; }
+    if (text) { hintBalloon = say(at, text, sticky ? Infinity : undefined, 'thought'); hintBalloon.g.setAttribute('data-world-hint', ''); }
   }
   function wrap(s: string, max = 22) {
     const out: string[] = []; let line = '';
@@ -29,27 +34,70 @@ export function createUI(svg: SVGSVGElement) {
     if (line) out.push(line);
     return out;
   }
-  function say(at: Anchor, text: string, dur = Math.max(2.6, text.length * 0.075 + 1.6), instruction = false) {
+  /** how long a word holds the pen before the next one starts */
+  function wordBeat(w: string) {
+    let d = .085 + Math.min(10, w.length) * .022;
+    if (/…$|\.\.\.$/.test(w)) d += .42; else if (/[.!?]$/.test(w)) d += .3; else if (/[,;:—]$/.test(w)) d += .16;
+    return d;
+  }
+  const LH = 8.8;
+  function say(at: Anchor, text: string, dur?: number, kind: 'speech' | 'thought' = 'speech') {
     // one balloon per speaker: a new line replaces the old
     balloons.filter((b) => b !== hintBalloon && b.at === at).forEach((b) => { b.dur = Math.min(b.dur, b.t + .25); });
-    const g = el('g', { opacity: 0, ...(instruction ? { 'data-instruction': '' } : {}) }, root);
-    const body = el('path', { fill: instruction ? '#fffaf0' : PAPER, stroke: instruction ? '#a64e40' : 'currentColor', 'stroke-width': instruction ? 1 : .8, 'stroke-linejoin': 'round' }, g);
-    const full = wrap(text, instruction ? 26 : 22), lineHeight = instruction ? 11 : 8.6;
-    const lines = full.map((_, i) => {
-      const n = el('text', { x: 0, y: f(-14 - (full.length - 1 - i) * lineHeight), 'font-size': instruction ? 9 : 7.2, 'font-family': SERIF, 'font-style': instruction ? 'normal' : 'italic', 'font-weight': instruction ? 600 : 400, fill: instruction ? '#302c27' : 'currentColor', 'text-anchor': 'middle' }, g);
-      n.textContent = full[i];
+    const thought = kind === 'thought';
+    const g = el('g', { opacity: 0, 'data-balloon': kind }, root);
+    const body = el('path', { fill: PAPER, stroke: 'currentColor', 'stroke-width': .8, 'stroke-linejoin': 'round' }, g);
+    const full = wrap(text, thought ? 24 : 22);
+    const words: Word[] = [];
+    let clock = .16;
+    const lines = full.map((line, i) => {
+      const n = el('text', { x: 0, y: f(-14 - (full.length - 1 - i) * LH), 'font-size': 7.2, 'font-family': SERIF, 'font-style': 'italic', fill: 'currentColor', 'text-anchor': 'middle' }, g);
+      line.split(' ').forEach((w, j, all) => {
+        const sp = el('tspan', { 'fill-opacity': 0 }, n) as SVGTSpanElement;
+        sp.textContent = j < all.length - 1 ? w + ' ' : w;
+        words.push({ n: sp, at: clock, done: false });
+        clock += wordBeat(w);
+      });
       return n;
     });
-    // measure with the full text, then type it in
-    let w = 0; lines.forEach((n) => { w = Math.max(w, n.getComputedTextLength?.() || full[0].length * 3.6); });
-    w += 12; const h = full.length * lineHeight + 9;
-    const x0 = -w / 2, y1 = -7.5, y0 = y1 - h, r = 4;
-    body.setAttribute('d', `M${f(x0 + r)} ${f(y0)} L${f(-x0 - r)} ${f(y0)} Q${f(-x0)} ${f(y0)} ${f(-x0)} ${f(y0 + r)} L${f(-x0)} ${f(y1 - r)} Q${f(-x0)} ${f(y1)} ${f(-x0 - r)} ${f(y1)} L3.5 ${f(y1)} L0.5 ${f(y1 + 5)} L-1.5 ${f(y1)} L${f(x0 + r)} ${f(y1)} Q${f(x0)} ${f(y1)} ${f(x0)} ${f(y1 - r)} L${f(x0)} ${f(y0 + r)} Q${f(x0)} ${f(y0)} ${f(x0 + r)} ${f(y0)}Z`);
-    lines.forEach((n) => (n.textContent = ''));
-    if (instruction) el('path', { d: `M${f(x0 + 6)} ${f(y0 + 4)}h12`, stroke: '#b64e40', 'stroke-width': 1.7, 'stroke-linecap': 'round' }, g);
-    const b = { g, at, lines, full, t: 0, dur, w, h, done: false, instruction };
+    const reveal = clock + .25;
+    // measure with every word in place (they are only transparent), then size the paper
+    let w = 0; lines.forEach((n, i) => { w = Math.max(w, n.getComputedTextLength?.() || full[i].length * 3.6); });
+    w += thought ? 15 : 12; const h = full.length * LH + 7;
+    const x0 = -w / 2, y1 = -7.5, y0 = y1 - h, r = thought ? 6.5 : 4;
+    if (thought) {
+      // a soft cloud: the rounded box with scalloped long edges, and two bubbles down to the head
+      const bumps = Math.max(2, Math.round(w / 15)), bw = (w - 2 * r) / bumps;
+      let d = `M${f(x0 + r)} ${f(y0)}`;
+      for (let i = 0; i < bumps; i++) d += ` Q${f(x0 + r + bw * (i + .5))} ${f(y0 - 2.2)} ${f(x0 + r + bw * (i + 1))} ${f(y0)}`;
+      d += ` Q${f(-x0)} ${f(y0)} ${f(-x0)} ${f(y0 + r)} L${f(-x0)} ${f(y1 - r)} Q${f(-x0)} ${f(y1)} ${f(-x0 - r)} ${f(y1)}`;
+      for (let i = bumps - 1; i >= 0; i--) d += ` Q${f(x0 + r + bw * (i + .5))} ${f(y1 + 2.2)} ${f(x0 + r + bw * i)} ${f(y1)}`;
+      d += ` Q${f(x0)} ${f(y1)} ${f(x0)} ${f(y1 - r)} L${f(x0)} ${f(y0 + r)} Q${f(x0)} ${f(y0)} ${f(x0 + r)} ${f(y0)}Z`;
+      body.setAttribute('d', d);
+      el('circle', { cx: 1.5, cy: f(y1 + 4.6), r: 1.7, fill: PAPER, stroke: 'currentColor', 'stroke-width': .7 }, g);
+      el('circle', { cx: -.4, cy: f(y1 + 8.4), r: 1, fill: PAPER, stroke: 'currentColor', 'stroke-width': .6 }, g);
+    } else body.setAttribute('d', `M${f(x0 + r)} ${f(y0)} L${f(-x0 - r)} ${f(y0)} Q${f(-x0)} ${f(y0)} ${f(-x0)} ${f(y0 + r)} L${f(-x0)} ${f(y1 - r)} Q${f(-x0)} ${f(y1)} ${f(-x0 - r)} ${f(y1)} L3.5 ${f(y1)} L0.5 ${f(y1 + 5)} L-1.5 ${f(y1)} L${f(x0 + r)} ${f(y1)} Q${f(x0)} ${f(y1)} ${f(x0)} ${f(y1 - r)} L${f(x0)} ${f(y0 + r)} Q${f(x0)} ${f(y0)} ${f(x0 + r)} ${f(y0)}Z`);
+    // never take the paper away before the words have been read
+    const read = Math.max(1.3, text.length * .045);
+    const b: Balloon = { g, at, words, full, t: 0, dur: dur === undefined ? reveal + read : dur === Infinity ? Infinity : Math.max(dur, dur < 1 ? dur : reveal + .9), w, h, reveal, thought, settled: false };
     balloons.push(b);
     return b;
+  }
+  function inkWords(b: Balloon) {
+    if (b.settled) return;
+    let all = true, prev = 0, line: Node | null = null;
+    for (const wd of b.words) {
+      if (wd.n.parentNode !== line) { line = wd.n.parentNode; prev = 0; } // dy runs on within a line
+      const u = clamp01((b.t - wd.at) / .38);
+      if (u >= 1 && !wd.done) { wd.done = true; wd.n.setAttribute('fill-opacity', '1'); }
+      if (!wd.done) all = false;
+      // a pale wash first, then the ink darkens as it soaks in, settling a hair downward
+      const off = wd.done ? 0 : -(1 - easeOut(u)) * 1.4;
+      if (!wd.done) wd.n.setAttribute('fill-opacity', f(u <= 0 ? 0 : .28 + .72 * easeOut(u)));
+      const dy = off - prev; prev = off;
+      if (Math.abs(dy) > .001) wd.n.setAttribute('dy', f(dy)); else wd.n.removeAttribute('dy');
+    }
+    if (all) { b.words.forEach((wd) => { wd.n.removeAttribute('dy'); wd.n.removeAttribute('fill-opacity'); }); b.settled = true; }
   }
   function drawBalloons(dt: number) {
     for (let i = balloons.length - 1; i >= 0; i--) {
@@ -60,18 +108,16 @@ export function createUI(svg: SVGSVGElement) {
         b.g.setAttribute('opacity', '0'); continue;
       }
       b.t += dt;
-      const inT = clamp01(b.t / 0.28), outT = clamp01((b.t - (b.dur - 0.25)) / 0.25);
-      const s = lerp(0.55, 1, backOut(inT)) * lerp(1, 0.9, outT);
+      const inT = clamp01(b.t / 0.32), outT = clamp01((b.t - (b.dur - 0.3)) / 0.3);
+      const s = lerp(0.7, 1, backOut(inT, 1.2)) * lerp(1, 0.94, outT);
       // keep the balloon inside the view, the tail still pointing at the speaker
       const a = b.at();
       const half = (b.w / 2) * k, top = (b.h + 8) * k;
-      const p: Vec = [Math.max(view.x + half + 3, Math.min(view.x + view.w - half - 3, a[0])), Math.max(view.y + top + 3, a[1])];
+      const p: Vec = [Math.max(view.x + half + 3, Math.min(view.x + view.w - half - 3, a[0])), Math.max(view.y + top + 3, a[1] - outT * 2 * k)];
       place(b.g, p, s);
       b.g.setAttribute('opacity', f(easeOut(inT) * (1 - outT)));
-      // typewriter
-      let left = b.instruction ? Infinity : Math.floor(Math.max(0, b.t - 0.12) * 34);
-      b.lines.forEach((n, j) => { const s2 = b.full[j]; const take = Math.max(0, Math.min(s2.length, left)); left -= s2.length; if (n.textContent!.length !== take) n.textContent = s2.slice(0, take); });
-      if (b.t >= b.dur) { b.g.remove(); balloons.splice(i, 1); }
+      inkWords(b);
+      if (b.t >= b.dur) { b.g.remove(); balloons.splice(i, 1); if (b === hintBalloon) hintBalloon = null; }
     }
   }
 
@@ -84,7 +130,7 @@ export function createUI(svg: SVGSVGElement) {
   const wingNear = el('path', { fill: '#d4524a', stroke: 'currentColor', 'stroke-width': 0.6, 'stroke-linejoin': 'round' }, craneInner);
   // Screen coordinates keep a docked companion steady while the camera follows you.
   // Its target is still a world anchor, so the same figure can fly into the scene.
-  const cr = { on: false, visible: false, initialized: false, target: null as Anchor | null, pos: [0, 0] as Vec, vel: [0, 0] as Vec, op: 0, face: 1, flap: 0, t: 0, dockDistance: 0 };
+  const cr = { arrive: false, on: false, visible: false, initialized: false, target: null as Anchor | null, pos: [0, 0] as Vec, vel: [0, 0] as Vec, op: 0, face: 1, flap: 0, t: 0, dockDistance: 0 };
   function guide(target: Anchor | null) { cr.on = !!target; cr.target = target; }
   const toWorld = (p: Vec): Vec => [view.x + p[0] * k / 1.8, view.y + p[1] * k / 1.8];
   function drawCrane(dt: number) {
@@ -92,12 +138,14 @@ export function createUI(svg: SVGSVGElement) {
     const ppu = 1.8 / k, width = view.w * ppu, height = view.h * ppu;
     const dock: Vec = [50, height - 56];
     if (!cr.initialized) { cr.pos = [...dock]; cr.initialized = true; }
+    // its first entrance: in from the top right, as if it had been flying over the roofs
+    if (cr.arrive && cr.visible) { cr.arrive = false; cr.pos = [width + 30, 70]; cr.vel = [-140, 40]; cr.op = .0; }
     cr.op = approach(cr.op, cr.visible ? 1 : 0, 5, dt);
     crane.setAttribute('opacity', f(cr.op));
     crane.setAttribute('data-guiding', String(cr.on));
     cr.dockDistance = Math.hypot(cr.pos[0] - dock[0], cr.pos[1] - dock[1]);
     crane.setAttribute('data-docked', String(!cr.on && cr.dockDistance < 12));
-    if (cr.op < .01 && !cr.visible) { cr.pos = [...dock]; cr.vel = [0, 0]; return; }
+    if (cr.op < .01 && !cr.visible) { if (!cr.arrive) { cr.pos = [...dock]; cr.vel = [0, 0]; } return; }
     let want: Vec;
     if (cr.target) {
       const tg = cr.target();
@@ -224,8 +272,9 @@ export function createUI(svg: SVGSVGElement) {
       }), { period: 3.1 });
     },
     dismissDialogue() { balloons.filter(b => b !== hintBalloon).forEach(b => { b.dur = Math.min(b.dur, b.t + .25); }); },
-    get typing() { return balloons.some(b => b !== hintBalloon && b.t < .12 + b.full.join('').length / 34); },
+    get typing() { return balloons.some(b => b !== hintBalloon && b.t < b.reveal); },
     companionVisible(show: boolean) { cr.visible = show; },
+    companionArrive() { cr.arrive = true; cr.initialized = true; },
     get companionDocked() { return !cr.on && cr.dockDistance < 12; }, showGesture, hideGesture, stillness, heart, sparkle,
     get guiding() { return cr.on; },
     /** where the guide crane is (for its own speech balloon) */

@@ -31,7 +31,9 @@ Element.prototype.setAttribute = function (name: string, value: string) {
   if (this.getAttribute(name) !== v) setAttr.call(this, name, v);
 };
 const q = new URLSearchParams(location.search);
-const saved = q.has('turna') ? null : readSave();
+// ?ogretici=… tries an opening from scratch without touching the real journey's save
+const trial = q.has('ogretici');
+const saved = q.has('turna') || trial ? null : readSave();
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;
 const card = $('#card');
 const svg = el('svg', { class: 'village', role: 'img', viewBox: `0 0 ${W} ${H}`, 'aria-label': 'Mürekkeple çizilmiş bir Japon sokağı; joystick ile yürüyen bir yolcu.' });
@@ -310,7 +312,7 @@ if (saved) {
 }
 let saveAt = 0, warnedSave = false, restarting = false;
 function saveGame() {
-  if (restarting || !story?.canSnapshot || home.busy) return;
+  if (trial || restarting || !story?.canSnapshot || home.busy) return;
   const snapshot = story.snapshot();
   const ok = writeSave({ version: 2, ...snapshot, home: home.snapshot(), market:market.snapshot(), world: { x: player.x, y: player.y, inside, fair: inFair, market:inMarket, tau } });
   if (!ok && !warnedSave) { warnedSave = true; hintN.textContent = 'Bu tarayıcı ilerlemeni kaydedemiyor.'; hintN.classList.remove('gone'); }
