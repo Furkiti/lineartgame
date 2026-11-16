@@ -5,8 +5,8 @@ Mürekkeple çizilmiş bir Japon mahallesinde küçük bir mobil oyun. Sokakta y
 Uçurtmanın biçimi, dükkânın işareti, örtünün deseni ve çanın kâğıdı senin çizdiğin gibi
 kalır. Seçimlerin mekânın kullanımını, hediyelerini ve sonraki sohbetleri değiştirir.
 
-Deneme sürümü: https://furkiti.github.io/lineartgame/playtest/
-Geliştirme branch’i: `codex/lineartgame-dev`.
+Oyun: https://furkiti.github.io/lineartgame/ (tek yayın; eski `/playtest/` adresi buraya yönlenir)
+Geliştirme: `main` dalı.
 
 ## İlk beş gün
 

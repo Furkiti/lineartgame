@@ -113,7 +113,8 @@ export function buildMarket(svg: SVGSVGElement, card: HTMLElement, options: {
       {id:'market-clay',title:'Sora’nın fincanları',hint:'',sketch:'M10 20H30L27 41H13ZM31 14H51L48 35H34Z',done:state.clay},
       {id:'market-paper',title:'Pazardan evime bir iz',hint:'',sketch:fitDrawing(state.postcard,30,30,40).map(l=>linePath(l)).join(' '),done:state.postcard.length>0},
     ].filter(e=>e.done);},
-    onEnter(){ const first=!state.seen; if(first){state.seen=true;options.hint('Söğüt Pazarı. Tezgâhların arasından aşağıya doğru gezebilirsin.',false);} return first; },
+    // the first visit shows a title card; the walking tip waits until it has gone, so the two never sit on top of each other
+    onEnter(){ const first=!state.seen; if(first){state.seen=true;setTimeout(()=>options.hint('Söğüt Pazarı. Tezgâhların arasından aşağıya doğru gezebilirsin.',false),3500);} return first; },
     help(pl:{x:number;y:number}){const s=booths.reduce((a,b)=>Math.hypot(pl.x-MX-a.x,pl.y-a.y)<Math.hypot(pl.x-MX-b.x,pl.y-b.y)?a:b);options.guide(()=>[MX+s.x,s.y-22]);guideT=5;options.hint(`${s.name}, “${s.title}” tezgâhının önünde. Sokak çıkışı avlunun en üstünde.`);},
     prompt(pl:{x:number;y:number}){if(api.busy)return null;const s=near(pl);return s?({tea:'Nori ile çay doldur',dango:'Momo ile dango diz',paper:'Rei ile kart çiz',clay:'Sora ile fincan yerleştir'}[s.id]??null):null;},
     act(pl:{x:number;y:number}){

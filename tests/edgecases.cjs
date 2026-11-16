@@ -294,6 +294,9 @@ async function settle() {
   ]) {
     p = await open(seed({ order: false }), viewport);
     await step(0.7);
+    // the button pops in with a short CSS animation (real time); measure once it has settled
+    const settled = () => p.waitForFunction(() => document.querySelector("#act").getAnimations().length === 0);
+    await settled();
     const a = await p.locator("#act").boundingBox();
     assert(
       a.x >= 0 &&
@@ -303,6 +306,7 @@ async function settle() {
     );
     await p.touchscreen.tap(90, viewport.height * 0.84);
     await step(0.3);
+    await settled();
     const b = await p.locator("#act").boundingBox();
     assert(Math.abs(a.y - b.y) < 0.5);
     await d.action("Hana ile konuş");
