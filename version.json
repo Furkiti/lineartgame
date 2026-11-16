@@ -1,9 +1,9 @@
 {
   "name": "Mürekkep Sokağı",
-  "version": "0.8.0",
-  "commit": "c5588c6b8c19a7406551a03b38aac5d0031fae2c",
-  "shortCommit": "c5588c6",
+  "version": "0.8.1",
+  "commit": "2189934be90fe7cda1881a43944dbca4e4ac5b2c",
+  "shortCommit": "2189934",
   "branch": "main",
-  "message": "Tek dal, tek yayın: beş gün, Söğüt Pazarı, dokunsal ev; üç küçük düzeltme",
-  "deployedAt": "2026-11-16T10:09:01Z"
+  "message": "Tatami odadaki kayar uyku paneli kaldırıldı",
+  "deployedAt": "2026-11-16T10:26:44Z"
 }
