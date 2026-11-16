@@ -198,13 +198,6 @@ export function buildHome(svg: SVGSVGElement) {
   const zab = [C_(house, 'M146 352 Q145 348 150 347.6 L166 347.6 Q171 348 170 352 Q170 355 165 355 L151 355 Q146 355 146 352Z', rgb(COL.red), SP * 0.7),
     C_(house, 'M202 352 Q201 348 206 347.6 L222 347.6 Q227 348 226 352 Q226 355 221 355 L207 355 Q202 355 202 352Z', rgb(COL.red), SP * 0.7)];
   P_(house, 'M166 349 l0 4 M164 351 l4 0 M206 349 l0 4 M204 351 l4 0', SP * 0.5);
-  const sleepClip=el('clipPath',{id:'home-sleep-pocket',clipPathUnits:'userSpaceOnUse'},svg);el('rect',{x:89,y:257,width:56,height:88},sleepClip);
-  const sleepPocket=el('g',{'clip-path':'url(#home-sleep-pocket)'},house);
-  const sleepScreen = el('g', { 'data-sleep-nook': '' }, sleepPocket);
-  C_(sleepScreen, rect(89, 257, 145, 345), '#f6f0df', SP * .7);
-  P_(sleepScreen, 'M89 279H145M89 301H145M89 323H145M103 257V345M117 257V345M131 257V345', SP * .35);
-  C_(sleepScreen, oval(138, 306, 1.1, 2.3), '#bda77f', SP * .4);
-  let screenOpen = 0;
   // bedding laid out at night in front of the tokonoma
   const futon = el('g', { opacity: 0 }, house);
   C_(futon, 'M92 352 Q91 347 97 347 L141 347 Q147 347 146 352 L146 357 Q146 361 140 361 L98 361 Q92 361 92 357Z', PAPER, SP * 0.8);
@@ -479,9 +472,6 @@ export function buildHome(svg: SVGSVGElement) {
       windowAir.setAttribute('opacity', api.windowOpen ? '.5' : '0');
       windowAir.setAttribute('d', [0, 1, 2].map(i => `M${158 + i * 19} 297q${f(8 + Math.sin(t * 1.4 + i) * 3)} 8 2 18`).join(' '));
       // Quiet household motion stays local: paper, fabric, air and a little dust.
-      screenOpen += ((api.canSleep || sleepT >= 0 ? 1 : 0) - screenOpen) * Math.min(1, dt * 2.5);
-      sleepScreen.setAttribute('transform', `translate(${f(-screenOpen * 53)} 0)`);
-      sleepScreen.setAttribute('opacity', f(1 - screenOpen * .55));
       motes.forEach((n, i) => { n.setAttribute('cx', f(153 + i * 13 + Math.sin(t * .25 + i) * 3)); n.setAttribute('cy', f(288 + ((t * 1.4 + i * 11) % 48))); n.setAttribute('opacity', f(.1 + Math.sin(t * .4 + i) * .07)); });
       lampShade.setAttribute('transform', `rotate(${f(Math.sin(t * .65) * .8)} 186 241)`);
       const cover = sleepT < 0 ? 0 : smooth(1.45, 2.35, sleepT);
