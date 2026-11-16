@@ -1,9 +1,9 @@
 {
   "name": "Mürekkep Sokağı",
-  "version": "0.8.1",
-  "commit": "2189934be90fe7cda1881a43944dbca4e4ac5b2c",
-  "shortCommit": "2189934",
+  "version": "0.9.0",
+  "commit": "48f696da5ed8788d1c8eee31b2bb81743c0b58eb",
+  "shortCommit": "48f696d",
   "branch": "main",
-  "message": "Tatami odadaki kayar uyku paneli kaldırıldı",
-  "deployedAt": "2026-11-16T10:26:44Z"
+  "message": "Kelime kelime beliren balonlar, hareketi kesmeyen açılış, suşiler tabakta görünür",
+  "deployedAt": "2026-11-16T10:51:56Z"
 }
