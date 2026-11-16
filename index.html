@@ -194,7 +194,12 @@
   #opening.open .door.l { transform: translateX(-102%); }
   #opening.open .door.r { transform: translateX(102%); }
   #opening.open .title { opacity: 0; transform: translate(-50%, -60%); }
-  #opening.open em { opacity: 0; }
+  #opening .who { position: absolute; left: 50%; top: 60%; transform: translateX(-50%); display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 10px 18px 12px; border-radius: 14px; background: #f4eedf; box-shadow: 0 0 0 1px #3b2c1e22; transition: opacity .4s; cursor: text; }
+  #opening .who span { font: 13px "Iowan Old Style", Georgia, serif; letter-spacing: .28em; color: #a54b3e; }
+  #opening .who input { width: 170px; padding: 7px 4px 5px; border: 0; border-bottom: 1.5px solid #3b2c1e; background: transparent; outline: none; text-align: center;
+                        font: italic 22px "Iowan Old Style", Georgia, serif; color: #1c1c1c; border-radius: 0; }
+  #opening .who input::placeholder { color: #1c1c1c55; }
+  #opening.open em, #opening.open .who { opacity: 0; }
   #opening.open { pointer-events: none; }
 
   .letter { position: absolute; inset: 0; z-index: 7; display: grid; place-items: center; padding: 20px; background: color-mix(in srgb, var(--ink) 28%, transparent);
@@ -232,7 +237,7 @@
     <button id="act" type="button"></button>
     <div id="banner"></div>
     <div id="opening"><div class="door l"></div><div class="door r"></div>
-      <div class="title"><b>Mürekkep Sokağı<i class="seal">旅</i></b><span>墨の通り</span></div><em>Başlamak için dokun</em></div>
+      <div class="title"><b>Mürekkep Sokağı<i class="seal">旅</i></b><span>墨の通り</span></div><label class="who"><span>Adın</span><input id="who" maxlength="14" autocomplete="off" spellcheck="false" placeholder="Deniz" enterkeyhint="go"></label><em>Başlamak için dokun</em></div>
     <div id="fade"></div>
     <div id="win"><div class="box">
       <h2>12 turna toplandı</h2>

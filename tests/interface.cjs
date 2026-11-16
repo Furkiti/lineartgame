@@ -62,26 +62,24 @@ async function settle(){
   await step(3);await p.waitForTimeout(500);
   assert.equal(await p.evaluate(()=>window.__game.story.mode),'walk');
   assert.equal(await p.locator('[data-companion]').getAttribute('opacity'),'0','the crane has not met you yet');
-  await step(2.2);
+  await step(.6);
   const hand=await p.locator('[data-gesture-hand]').boundingBox();
-  assert(hand.y>844*.73,'walking demonstration stays by the thumb');
-  assert.equal(await p.locator('[data-world-hint][data-balloon=thought]').count(),1,'the walking hint is a thought, not a sign');
+  assert(hand.y>844*.7,'walking demonstration stays by the thumb');
+  assert(Math.abs(hand.x+hand.width*.3-195)<60,'walking demonstration is centred: '+JSON.stringify(hand));
+  assert.equal(await p.locator('[data-world-hint][data-balloon=thought]').count(),1,'the walking hint is there from the start, as a thought');
   await p.screenshot({path:'.local/v7-ui-walking-first.png'});
   const modes=new Set();
   await d.drive(-1,0);for(let i=0;i<6;i++){await step(.25);modes.add(await p.evaluate(()=>window.__game.story.mode));}await d.drive(0,0);
-  let sawTurna=false;
-  for(let i=0;i<40&&!(await p.evaluate(()=>window.__game.story._dbg.q.guideMet));i++){
-    await step(.25);modes.add(await p.evaluate(()=>window.__game.story.mode));
-    if((await p.locator('svg.village').textContent()).includes('Ben Turna.')){if(!sawTurna)await p.screenshot({path:'.local/v7-ui-turna-hello.png'});sawTurna=true;}
-  }
+  let saw=false;
+  for(let i=0;i<20&&!saw;i++){await step(.25);modes.add(await p.evaluate(()=>window.__game.story.mode));saw=(await p.locator('svg.village').textContent()).replace(/\s/g,'').includes('uçurtmasıkaçıyor');}
+  assert(saw,'the traveller notices the kite getting away');
+  await step(.6);await p.screenshot({path:'.local/v7-ui-kite-thought.png'});
+  for(let i=0;i<12;i++){await step(.25);modes.add(await p.evaluate(()=>window.__game.story.mode));}
   assert.deepEqual([...modes],['walk'],'the opening never takes the controls away');
-  assert(sawTurna,'the crane says hello on the way');
-  assert.equal(await p.evaluate(()=>window.__game.story._dbg.q.guideMet),true);
-  for(let i=0;i<16&&(await p.locator('[data-companion]').getAttribute('data-docked'))!=='true';i++)await step(.25);
-  assert.equal(await p.locator('[data-companion]').getAttribute('data-docked'),'true','then it settles in its corner');
-  await p.screenshot({path:'.local/v7-ui-turna-return.png'});
+  assert.equal(await p.locator('[data-lost-kite]').getAttribute('data-state'),'escaping');
+  assert.equal(await p.locator('[data-companion]').getAttribute('opacity'),'0','the crane waits for its moment');
   assert.deepEqual(d.errors,[]);
-  console.log('PASS day/place card → walking lesson → automatic single-crane introduction');
+  console.log('PASS day/place card → centred walking hint at once → kite noticed, controls never taken');
 
   p = await stage(base());
   await step(0.5);

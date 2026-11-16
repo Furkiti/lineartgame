@@ -41,6 +41,8 @@ export function createUI(svg: SVGSVGElement) {
     return d;
   }
   const LH = 8.8;
+  // who is speaking: a small name tab on the balloon's corner (the traveller's own lines carry none)
+  const names = new Map<Anchor, string>();
   function say(at: Anchor, text: string, dur?: number, kind: 'speech' | 'thought' = 'speech') {
     // one balloon per speaker: a new line replaces the old
     balloons.filter((b) => b !== hintBalloon && b.at === at).forEach((b) => { b.dur = Math.min(b.dur, b.t + .25); });
@@ -77,9 +79,21 @@ export function createUI(svg: SVGSVGElement) {
       el('circle', { cx: 1.5, cy: f(y1 + 4.6), r: 1.7, fill: PAPER, stroke: 'currentColor', 'stroke-width': .7 }, g);
       el('circle', { cx: -.4, cy: f(y1 + 8.4), r: 1, fill: PAPER, stroke: 'currentColor', 'stroke-width': .6 }, g);
     } else body.setAttribute('d', `M${f(x0 + r)} ${f(y0)} L${f(-x0 - r)} ${f(y0)} Q${f(-x0)} ${f(y0)} ${f(-x0)} ${f(y0 + r)} L${f(-x0)} ${f(y1 - r)} Q${f(-x0)} ${f(y1)} ${f(-x0 - r)} ${f(y1)} L3.5 ${f(y1)} L0.5 ${f(y1 + 5)} L-1.5 ${f(y1)} L${f(x0 + r)} ${f(y1)} Q${f(x0)} ${f(y1)} ${f(x0)} ${f(y1 - r)} L${f(x0)} ${f(y0 + r)} Q${f(x0)} ${f(y0)} ${f(x0 + r)} ${f(y0)}Z`);
+    const name = thought ? '' : names.get(at) ?? '';
+    let tab = 0;
+    if (name) {
+      const tg = el('g', { 'data-speaker': name }, g);
+      const tabBody = el('path', { fill: PAPER, stroke: 'currentColor', 'stroke-width': .6, 'stroke-linejoin': 'round' }, tg);
+      const label = el('text', { x: f(x0 + 9), y: f(y0 - 1.7), 'font-size': 5.2, 'letter-spacing': .45, 'font-family': SERIF, 'font-weight': 600, fill: '#a54b3e' }, tg);
+      label.textContent = name;
+      const lw = (label.getComputedTextLength?.() || name.length * 3) + 9;
+      // a little paper tab sitting on the balloon's top edge, its lower half tucked in
+      tabBody.setAttribute('d', `M${f(x0 + 4.5)} ${f(y0 + 1.2)}V${f(y0 - 4.3)}Q${f(x0 + 4.5)} ${f(y0 - 6.8)} ${f(x0 + 7)} ${f(y0 - 6.8)}H${f(x0 + 2 + lw)}Q${f(x0 + 4.5 + lw)} ${f(y0 - 6.8)} ${f(x0 + 4.5 + lw)} ${f(y0 - 4.3)}V${f(y0 + 1.2)}`);
+      tab = 7;
+    }
     // never take the paper away before the words have been read
     const read = Math.max(1.3, text.length * .045);
-    const b: Balloon = { g, at, words, full, t: 0, dur: dur === undefined ? reveal + read : dur === Infinity ? Infinity : Math.max(dur, dur < 1 ? dur : reveal + .9), w, h, reveal, thought, settled: false };
+    const b: Balloon = { g, at, words, full, t: 0, dur: dur === undefined ? reveal + read : dur === Infinity ? Infinity : Math.max(dur, dur < 1 ? dur : reveal + .9), w, h: h + tab, reveal, thought, settled: false };
     balloons.push(b);
     return b;
   }
@@ -264,11 +278,13 @@ export function createUI(svg: SVGSVGElement) {
 
   return {
     root, say, hint, guide,
+    speaker(at: Anchor, name: string) { names.set(at, name); },
     showWalkingGesture() {
       hand.setAttribute('data-tutorial', 'walk');
       showGesture('path', () => Array.from({ length: 49 }, (_, i) => {
         const a = i / 48 * Math.PI * 2;
-        return [view.x + view.w * (.42 + Math.sin(a) * .09), view.y + view.h * (.82 + Math.sin(a * 2) * .023)] as Vec;
+        // centred on the screen (the drawn hand hangs to the right of its fingertip)
+        return [view.x + view.w * (.5 + Math.sin(a) * .09) - 7 * k, view.y + view.h * (.8 + Math.sin(a * 2) * .023)] as Vec;
       }), { period: 3.1 });
     },
     dismissDialogue() { balloons.filter(b => b !== hintBalloon).forEach(b => { b.dur = Math.min(b.dur, b.t + .25); }); },

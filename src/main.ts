@@ -31,9 +31,7 @@ Element.prototype.setAttribute = function (name: string, value: string) {
   if (this.getAttribute(name) !== v) setAttr.call(this, name, v);
 };
 const q = new URLSearchParams(location.search);
-// ?ogretici=… tries an opening from scratch without touching the real journey's save
-const trial = q.has('ogretici');
-const saved = q.has('turna') || trial ? null : readSave();
+const saved = q.has('turna') ? null : readSave();
 const $ = <T extends HTMLElement = HTMLElement>(s: string) => document.querySelector(s) as T;
 const card = $('#card');
 const svg = el('svg', { class: 'village', role: 'img', viewBox: `0 0 ${W} ${H}`, 'aria-label': 'Mürekkeple çizilmiş bir Japon sokağı; joystick ile yürüyen bir yolcu.' });
@@ -299,12 +297,19 @@ const openingN = $('#opening');
 let opened = !!saved || !STORY || (q.has('debug') && !q.has('opening'));
 let openingReady = opened;
 if (opened) openingN.remove();
-else openingN.addEventListener('click', () => {
+else {
+  // the traveller's name, so the neighbours can call you by it
+  const whoN = $('#who') as HTMLInputElement;
+  whoN.addEventListener('click', (e) => e.stopPropagation());
+  whoN.addEventListener('pointerdown', (e) => e.stopPropagation());
+  whoN.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); whoN.blur(); openingN.click(); } });
+  openingN.addEventListener('click', () => {
   if (opened) return;
   opened = true; openingN.classList.add('open');
-  story?.opened();
+  story?.opened(whoN.value);
   setTimeout(() => { openingN.remove(); openingReady = true; }, 1900);
 });
+}
 
 if (saved) {
   if (saved.world.inside) enter(); else if (saved.world.market) enterMarket(); else if (saved.world.fair) enterFair();
@@ -312,7 +317,7 @@ if (saved) {
 }
 let saveAt = 0, warnedSave = false, restarting = false;
 function saveGame() {
-  if (trial || restarting || !story?.canSnapshot || home.busy) return;
+  if (restarting || !story?.canSnapshot || home.busy) return;
   const snapshot = story.snapshot();
   const ok = writeSave({ version: 2, ...snapshot, home: home.snapshot(), market:market.snapshot(), world: { x: player.x, y: player.y, inside, fair: inFair, market:inMarket, tau } });
   if (!ok && !warnedSave) { warnedSave = true; hintN.textContent = 'Bu tarayıcı ilerlemeni kaydedemiyor.'; hintN.classList.remove('gone'); }

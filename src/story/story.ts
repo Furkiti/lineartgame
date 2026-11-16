@@ -193,7 +193,7 @@ export function createStory(o: {
   const q = {
     kite: 'sad' as 'sad' | 'talked' | 'done', dinner: '' as '' | 'kenta' | 'alone', sushi: false, fox: false,
     lantern: false, toy: false, toyKind: 0, catHome: false, letter: false, fair: false, order: false, fresh: new Set<string>(), day: 1, slept: 0,
-    created: false, walkLearned: false, guideMet: false, met: false, homeSeen: false, homeShown: false, visitedHome: false, kentaAway: false, nightHint: false, windowMoment: false, tableDecor: false,
+    name: '', created: false, walkLearned: false, guideMet: false, met: false, homeSeen: false, homeShown: false, visitedHome: false, kentaAway: false, nightHint: false, windowMoment: false, tableDecor: false,
     visit: 'none' as Visit, invitedDay: 0, missedNote: false, reminded: false,
     day2Seen: false, day3Seen: false, souvenir: '' as '' | 'cushion' | 'water', coins: 0,
     project: '' as '' | 'tea' | 'paws' | 'lanterns', projectPlan: '' as '' | 'tea' | 'paws', projectDay: 0, gathering: false, keepsake: false, tookMemento: false,
@@ -373,27 +373,16 @@ export function createStory(o: {
   const arrival = document.createElement('div'); arrival.className = 'arrival-card';
   arrival.innerHTML = '<small>1. gün</small><h1>Mürekkep Sokağı</h1><i aria-hidden="true"></i>';
   card.appendChild(arrival);
-  // The first minute teaches by letting you play. Nothing ever stops your feet: the hint only
-  // comes if you wait, it leaves as soon as you walk, and the crane meets you on the way.
-  // Three openings can be tried side by side: ?ogretici=akis (default) | sessiz | turna.
-  const lesson = (() => { const v = new URLSearchParams(location.search).get('ogretici'); return v === 'sessiz' || v === 'turna' ? v : 'akis'; })();
-  let craneOut = q.guideMet;
-  function* walkLesson(hintText: string | null, idleBefore: number): Scene {
-    let last: Vec = [player.x, player.y], walked = 0, movingFor = 0, idle = 0, shown = false;
-    yield () => {
-      walked += Math.hypot(player.x - last[0], player.y - last[1]); last = [player.x, player.y];
-      if (player.moving > .2) movingFor += ctx.dt; else if (!ctx.stickActive) idle += ctx.dt;
-      if (!shown && walked < 4 && idle > idleBefore) { shown = true; ui.showWalkingGesture(); if (hintText) env.tip(hintText, true); }
-      // Loops count too; pushing against the pavement edge must not trap the first lesson.
-      return walked > 22 || walked > 8 && movingFor > 1.4;
-    };
-    q.walkLearned = true; ui.hideGesture(); if (shown) env.tip(null);
-  }
-  const nearFirstMeeting = () => Math.abs(player.x - kenta.x) < 70;
+  // The first minute teaches by letting you play. Nothing ever stops your feet: the walking
+  // hint is there from the first moment and leaves as soon as you walk. Then you notice your
+  // little neighbour's kite getting away. The crane only introduces itself later, once it has
+  // something to show you (the way home).
+  const who = () => q.name || 'Deniz';
+  let craneOut = q.guideMet, craneScene = false;
+  ui.speaker(kentaHead, 'Kenta'); ui.speaker(guestHead, 'Kenta'); ui.speaker(hanaHead, 'Hana'); ui.speaker(ui.craneAt, 'Turna');
   function* craneLine(text: string): Scene {
-    if (nearFirstMeeting()) return;
     const b = ui.say(ui.craneAt, text);
-    yield () => b.t >= b.dur - .3 || nearFirstMeeting();
+    yield () => b.t >= b.dur - .3;
   }
   function* intro(): Scene {
     mode = 'intro';
@@ -403,35 +392,31 @@ export function createStory(o: {
     arrival.classList.remove('show');
     q.created = true;
     mode = 'walk'; cam = null;
-    yield .5;
-    const beside = () => [player.x + 18, player.y - 44] as Vec;
-    if (lesson === 'turna') {
-      craneOut = true; ui.companionArrive(); ui.guide(beside);
-      yield 1.1;
-      yield* craneLine('Günaydın! Ben Turna.');
-      if (!q.walkLearned) { const b = ui.say(ui.craneAt, 'Parmağını ekranda kaydır; birlikte yürüyelim.', Infinity); ui.showWalkingGesture(); yield* walkLesson(null, 99); b.dur = Math.min(b.dur, b.t + .3); }
-      yield .4;
-      yield* craneLine('İşte böyle. Acelemiz yok.');
-      yield* craneLine('Yolunu ararsan köşede beklerim.');
-    } else {
-      yield* walkLesson(lesson === 'sessiz' ? null : 'Parmağını ekranda kaydır. Acele yok.', lesson === 'sessiz' ? 2.6 : 1.8);
-      // a few easy steps of your own before anyone says hello
-      let strolled = 0;
-      yield () => { strolled += ctx.dt * (player.moving > .2 ? 1 : .35); return strolled > 1.6 || nearFirstMeeting(); };
-      craneOut = true; ui.companionArrive(); ui.guide(beside);
-      yield () => ui.craneAt()[1] > player.y - 75 || nearFirstMeeting();
-      yield .3;
-      if (lesson === 'sessiz') { ui.heart([player.x + 18, player.y - 52]); sfx.chime(); yield 1.4; }
-      else {
-        yield* craneLine('Günaydın! Ben Turna.');
-        yield* craneLine('Yolunu ararsan köşede beklerim.');
-      }
+    yield .35;
+    ui.showWalkingGesture(); env.tip('Parmağını ekranda kaydır.', true);
+    let last: Vec = [player.x, player.y], walked = 0, movingFor = 0;
+    yield () => {
+      walked += Math.hypot(player.x - last[0], player.y - last[1]); last = [player.x, player.y];
+      if (player.moving > .2) movingFor += ctx.dt;
+      // Loops count too; pushing against the pavement edge must not trap the first lesson.
+      return walked > 22 || walked > 8 && movingFor > 1.4;
+    };
+    q.walkLearned = true; ui.hideGesture(); env.tip(null);
+    yield 1.1;
+    // over there: a gust takes Kenta's kite out of the cherry tree. The camera widens to show it
+    // (you keep walking) and the traveller recognises him.
+    if (!q.met) {
+      stuck.release();
+      cam = fit(Math.min(player.x, kenta.x) - 40, 150, Math.max(player.x + 40, STUCK[0] + 60), 392, 2.2);
+      yield .7;
+      think('Aa! Kenta’nın uçurtması kaçıyor!');
+      yield 2.6;
+      if (mode === 'walk' && !q.met) cam = null;
     }
-    ui.guide(null); q.guideMet = true; q.walkLearned = true; ui.hideGesture();
   }
 
   function* talk(): Scene {
-    mode = 'cine'; obj = null; ui.guide(null); focusOn = () => [kenta.x, kenta.y];
+    mode = 'cine'; obj = null; ui.guide(null); focusOn = () => [kenta.x, kenta.y]; ui.hint(playerHead, null);
     const x0 = Math.min(player.x, kenta.x), x1 = Math.max(player.x, kenta.x);
     cam = fit(x0 - 45, 268, x1 + 45, 382, 2.2);
     player.faceTo = kenta.x > player.x ? 0.25 : Math.PI - 0.25;
@@ -439,16 +424,13 @@ export function createStory(o: {
     kenta.want.sad = 0.4;
     q.met = true;
     yield .5;
-    ui.say(kentaHead, 'Pardon! Uçurtmam yukarı kaçtı.', 2.6);
-    yield 2.3;
-    cam = fit(STUCK[0] - 70, STUCK[1] - 60, STUCK[0] + 70, STUCK[1] + 80, 2.4);
+    yield* sayLine(kentaHead, `${who()}! Uçurtmamı kaçırdım…`);
     kenta.want.look = 1;
-    yield 1.2;
-    yield 2.2;
+    yield* sayLine(kentaHead, 'Rüzgâr ipini kopardı, uçup gitti.');
     q.kite = 'talked'; kenta.want.look = 0;
     cam = fit(kenta.x - 65, 220, kenta.x + 90, 390, 2);
-    ui.say(kentaHead, 'Buraya yenisini çizebilir misin?', 3);
-    yield 2.7;
+    kenta.want.sad = 0.2;
+    yield* sayLine(kentaHead, 'Sen çok güzel çiziyorsun. Bana yenisini çizer misin?');
     startBrush('kite');
   }
 
@@ -540,7 +522,7 @@ export function createStory(o: {
     yield 2;
     kenta.want.look = 0;
     cam = fit(Math.min(player.x, kenta.x) - 45, 268, Math.max(player.x, kenta.x) + 45, 382, 2.2);
-    const question = ui.say(kentaHead, 'Akşam yemeğe sana gelebilir miyim?', 60);
+    const question = ui.say(kentaHead, `${who()}, akşam yemeğe sana gelebilir miyim?`, 60);
     yield () => question.t >= .12 + question.full.join('').length / 34;
     yield .45;
     const a = yield* choose(['Gel, birlikte yeriz.', 'Başka akşam olsun.']);
@@ -557,12 +539,27 @@ export function createStory(o: {
     departing = true; kenta.want.wave = .65; kenta.walkTo(600, 357);
     yield () => kenta.x > player.x + 175;
     departing = false; q.kentaAway = true; kenta.g.style.display = 'none';
-    yield .5;
-    q.homeShown = true;
-    cam = fit(410, 258, 495, 385, 2);
-    env.tip('Evin şu taşlı ara sokağın sonunda.', true);
-    yield 4.2;
-    mode = 'walk'; cam = null; toDoor();
+    yield .4;
+    // now someone has a reason to show you the way: the paper crane comes down to meet you
+    cam = null; mode = 'walk';
+    craneOut = craneScene = true; ui.companionArrive(); ui.guide(() => [player.x + 18, player.y - 44]);
+    let flying = 0;
+    yield () => (flying += ctx.dt) > 5 || ui.craneAt()[1] > player.y - 80 && flying > 1.2;
+    mode = 'cine'; focusOn = () => ui.craneAt();
+    yield* craneLine(`Merhaba ${who()}! Ben Turna, yol arkadaşın.`);
+    yield* craneLine(q.dinner === 'kenta' ? 'Akşama misafirin var. Önce evine gidelim.' : 'Gün uzun. Önce evini göstereyim.');
+    yield* craneLine('Evin bu tarafta. Peşimden gel!');
+    q.homeShown = true; focusOn = null; mode = 'walk'; craneScene = false;
+    // it flies ahead to the mouth of the stone alley and waits there while you walk
+    const mouth = (): Vec => [DOOR_X, Math.max(300, Math.min(player.y - 40, 318))];
+    ui.guide(mouth); toDoor();
+    let waited = 0;
+    yield () => { waited += ctx.dt; return ctx.inside || Math.abs(player.x - DOOR_X) < 22 && player.y < 352 || waited > 45; };
+    if (!ctx.inside && waited <= 45) yield* craneLine('İşte! Ara sokağın sonu senin evin.');
+    ui.guide(null);
+    yield 1.2;
+    yield* craneLine('Yolunu ararsan beni köşede bul, bana dokun.');
+    q.guideMet = true;
   }
 
   function* toyPick(): Scene {
@@ -858,7 +855,7 @@ export function createStory(o: {
   }
   function contextDirection() {
     const chapter = nextChapter(q);
-    if (chapter === 'kite') return 'Ağacın oradaki çocuğa bakalım.';
+    if (chapter === 'kite') return q.met ? 'Kenta kiraz ağacının altında, uçurtmasını bekliyor.' : 'Kenta kiraz ağacının altında. Uçurtması kaçtı.';
     if (chapter === 'sign') return 'Hana çay evinde. Dünkü uçurtmanı duymuş.';
     if (chapter === 'shelter') return 'Hana ile Kenta bankın yanında, yağmurdan kaçıyor.';
     if (chapter === 'chime') return 'Çan, dün kurduğun köşede.';
@@ -1122,7 +1119,8 @@ export function createStory(o: {
   }
 
   // ------------------------------------------------------------------ api
-  if (!q.created || !q.walkLearned || !q.guideMet) run(intro(), false);
+  if (q.kite === 'done' && !q.guideMet) q.guideMet = craneOut = true;
+  if (!q.created || !q.walkLearned) run(intro(), false);
   else { mode = 'walk'; if (q.kite !== 'done') setObj(kentaHead, () => nearKenta(), false); }
   refreshDots();
   return {
@@ -1145,19 +1143,20 @@ export function createStory(o: {
     /** what the action button says, if the story has something to offer */
     prompt(): string | null {
       if (paper.isOpen || notebook.isOpen) return '';
-      if (mode === 'brush') return purpose === 'lantern' && lanternStrokes > 0 ? 'Bitti' : 'Vazgeç';
+      // the kite is a promise to a friend: there is no giving up on it, only drawing
+      if (mode === 'brush') return purpose === 'kite' ? '' : purpose === 'lantern' && lanternStrokes > 0 ? 'Bitti' : 'Vazgeç';
       if (mode !== 'walk') return '';
       return offer()?.label ?? null;
     },
     act(): boolean {
       if (paper.isOpen || notebook.isOpen) return true;
-      if (mode === 'brush') { endBrush(); return true; }
+      if (mode === 'brush') { if (purpose !== 'kite') endBrush(); return true; }
       if (mode !== 'walk') return true;
       const o2 = offer();
       if (o2) { sfx.tap(); o2.go(); return true; }
       return false;
     },
-    opened() { sfx.paper(); setTimeout(() => sfx.chime(), 500); },
+    opened(name = '') { q.name = name.trim().slice(0, 14); sfx.paper(); setTimeout(() => sfx.chime(), 500); },
     /** first steps into the fair */
     onFair() {
       q.fair = true; mark('fair');
@@ -1327,11 +1326,11 @@ export function createStory(o: {
         obj.since += dt;
         const inScene = obj.inside === c.inside && !c.fair;
         const isNear = obj.near();
-        if (!obj.guided && inScene && obj.since > 35) { obj.guided = true; env.tip(!q.visitedHome ? 'Evin bu taşlı ara sokağın sonunda. Yön için Turna’ya dokunabilirsin.' : contextDirection(), true); }
+        if (!obj.guided && inScene && obj.since > 35) { obj.guided = true; env.tip(nextChapter(q) === 'kite' ? contextDirection() : !q.visitedHome ? 'Evim bu taşlı ara sokağın sonunda.' + (q.guideMet ? ' Turna da yol gösterir.' : '') : contextDirection(), true); }
         if (isNear && ui.guiding) ui.guide(null);
 
         ui.sparkle(isNear && obj.since > 6 ? obj.at : null);
-      } else if (mode !== 'walk' && mode !== 'intro') ui.guide(null);
+      } else if (mode !== 'walk' && mode !== 'intro' && !craneScene) ui.guide(null);
       if (q.kite === 'talked' && mode === 'walk' && !script) ui.sparkle(() => [kenta.x, kenta.y - 30]);
     },
     /** called on any touch: a ring and a sound, everywhere */

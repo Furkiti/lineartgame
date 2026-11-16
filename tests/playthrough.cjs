@@ -13,11 +13,13 @@ let d;
   await d.drive(-1,0);
   await wait(()=>window.__game.story._dbg.q.walkLearned);
   await d.drive(0,0);
-  await wait(()=>window.__game.story._dbg.q.guideMet&&window.__game.story.mode==='walk');
+  await wait(()=>document.querySelector('svg.village').textContent.replace(/\s/g,'').includes('uçurtmasıkaçıyor'));
+  assert.equal(await p.locator('[data-lost-kite]').getAttribute('data-state'),'escaping');
   await d.drive(1,0);
   await wait(()=>window.__game.story.mode==='cine');
   await d.drive(0,0);
-  assert.equal(await p.locator('[data-lost-kite]').getAttribute('data-state'),'escaping');
+  await wait(()=>!!document.querySelector('[data-speaker=Kenta]'));
+  assert((await p.locator('svg.village').textContent()).replace(/\s/g,'').includes('Deniz!Uçurtmamı'),'Kenta calls the traveller by name');
   assert.equal(await p.evaluate(()=>window.__game.story._dbg.kenta.dir),-1);
   await wait(() => window.__game.story.mode === "brush");
   await p.waitForTimeout(1100);
@@ -33,11 +35,13 @@ let d;
   });
   await d.stroke(await d.mapSVG("svg.village", kite), 150);
   await d.choice(0);
+  await wait(()=>document.querySelector('svg.village').textContent.replace(/\s/g,'').includes('BenTurna'));
   await wait(
     () =>
       window.__game.story.mode === "walk" &&
       window.__game.story._dbg.q.homeShown,
   );
+  assert.equal(await p.locator('[data-companion]').getAttribute('data-guiding'),'true','the crane leads the way home');
   await p.screenshot({ path: ".local/v5-full-02-home-direction.png" });
   console.log("opening and home direction passed");
   await d.home();
