@@ -1,9 +1,9 @@
 {
   "name": "Mürekkep Sokağı",
-  "version": "0.13.0",
-  "commit": "9899959e91e717ef78bb4f0680a58053eba852d9",
-  "shortCommit": "9899959",
+  "version": "0.14.0",
+  "commit": "798a1b52dd3d0b00d96b4b97fabe2168932ba9ce",
+  "shortCommit": "798a1b5",
   "branch": "main",
-  "message": "Ara sokak taşları, şablonlu çizimler, kutuya dizilen altı nigiri",
-  "deployedAt": "2026-11-17T16:46:26Z"
+  "message": "Ara sokak kurşun kalemden mürekkebe çiziliyor",
+  "deployedAt": "2026-11-17T20:51:30Z"
 }
