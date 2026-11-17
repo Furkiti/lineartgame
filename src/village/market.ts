@@ -11,12 +11,15 @@ const STALLS = [
   { id:'dango', name:'Momo', title:'Üç Küçük Lokma', x:395, y:558, color:'#b96c65', w:140 },
   { id:'paper', name:'Rei', title:'Kâğıt & İz', x:124, y:678, color:'#536c8b', w:138 },
   { id:'clay', name:'Sora', title:'Topraktan Fincan', x:392, y:798, color:'#ad835b', w:146 },
+  { id:'manav', name:'Ume', title:'Taze Manav', x:125, y:918, color:'#7d9a5a', w:140 },
 ];
 export function buildMarket(svg: SVGSVGElement, card: HTMLElement, options: {
   saved?: Record<string, any>; homeSurface: Element;
   hint: (text:string|null, sticky?:boolean)=>void;
   memory:(id:string)=>void;
   guide:(at:(()=>Vec)|null)=>void;
+  /** Ume's stall: the story opens the greengrocer close-up */
+  shop?:()=>void;
 }) {
   const root = el('g', {'data-scene':'market', style:'display:none;color:#34322c'}, svg);
   const bg = el('g', {transform:`translate(${MX} 0)`}, root);
@@ -41,8 +44,8 @@ export function buildMarket(svg: SVGSVGElement, card: HTMLElement, options: {
   el('text',{x:260,y:129,'text-anchor':'middle','font-size':15,'font-family':'serif','letter-spacing':3},bg).textContent='柳の市';
   el('text',{x:260,y:330,'text-anchor':'middle','font-size':9,fill:'#866b51'},bg).textContent='Mürekkep Sokağı ↑';
   // A broad, flat lane descends between alternating stall pockets.
-  path(bg,'M28 324H492M28 339H492M30 339V892M490 339V892','none',.65);
-  for(let y=375;y<910;y+=49){
+  path(bg,'M28 324H492M28 339H492M30 339V1012M490 339V1012','none',.65);
+  for(let y=375;y<1030;y+=49){
     path(bg,`M31 ${y}H489`,'none',.25);
     for(let x=62+(Math.round(y/49)%2)*48;x<490;x+=96) path(bg,`M${x} ${y-48}v48`,'none',.23);
   }
@@ -77,6 +80,7 @@ export function buildMarket(svg: SVGSVGElement, card: HTMLElement, options: {
     if(i===1){path(detail,'M-5 -48H5L5 -45H-5Z','#f0e4cb',.5);path(detail,'M-5 -32H5L6 -16H-6Z','#f0e4cb',.6);}
     if(i===2)path(detail,'M-5 -48q5-7 10 0l-2 2l-2-2l-3 2Z','#332e2c',.6);
     if(i===3){path(detail,'M-7 -34H7L6 -15H-6Z','#c9bca1',.6);path(detail,'M-3 -31v12M2 -25h3','none',.5);}
+    if(i===4){path(detail,'M-6 -47Q0 -54 6 -47L5 -44Q0 -48 -5 -44Z','#c8423a',.55);path(detail,'M-6 -33H6L6 -17H-6Z','#e9dcc0',.6);}
     const booth=el('g',{'data-stall':s.id,transform:`translate(${MX+s.x} ${s.y})`},depth),hw=s.w/2;
     path(booth,`M-${hw} -30H${hw}V-14H-${hw}ZM-${hw-2} -33H${hw+2}V-26H-${hw-2}Z`,'#c49c70',.9);
     path(booth,`M-${hw-5} -14V5h6v-19M${hw-5} -14V5h-6v-19`,'#ae8e68',.75);
@@ -88,6 +92,7 @@ export function buildMarket(svg: SVGSVGElement, card: HTMLElement, options: {
     if(i===0){path(goods,'M-18 -35q-3 -23 15-23q15 0 12 23ZM-15 -47q-15 -11-19-4l15 13M8 -51q16-7 13 8q-1 7-12 6','#bf9066',.8);for(const x of[27,43])path(goods,`M${x-5} -41h10l-2 9h-6Z`,'#eee1c4',.6);}
     if(i===1)for(let k=0;k<3;k++){path(goods,`M${-31+k*28} -34v-25`,'none',.6);for(let j=0;j<3;j++)el('circle',{cx:-31+k*28,cy:-40-j*9,r:4.7,fill:['#b5be8b','#f4e9d3','#dca6a0'][j],stroke:'currentColor','stroke-width':.45},goods);}
     if(i===2){path(goods,'M-54 -34v-19h27v19Z',PAPER,.65);path(goods,'M-48 -39l6-9l6 9l-5-3Z','none',.6);for(let k=0;k<4;k++)path(goods,`M${19+k*6} -34l7-24`,'none',1);path(goods,'M21 -35h24l-3 10H24Z','#ae8a64',.6);}
+    if(i===4){path(goods,'M-56 -34h30v-12h-30Z','#d9b380',.7);for(let k=0;k<3;k++)el('circle',{cx:-49+k*8,cy:-50,r:4,fill:'#f0a046',stroke:'currentColor','stroke-width':.45},goods);path(goods,'M-18 -34h30v-12h-30Z','#d9b380',.7);for(let k=0;k<3;k++)path(goods,`M${-15+k*1} ${-49+k*3}h24`,'#6f9d45',.5);path(goods,'M20 -34h30v-12h-30Z','#d9b380',.7);for(let k=0;k<4;k++)el('ellipse',{cx:25+k*7,cy:-50,rx:3,ry:4,fill:'#fbf6ea',stroke:'currentColor','stroke-width':.45},goods);}
     if(i===3)for(let k=0;k<4;k++){const x=-43+k*27;path(goods,`M${x-8} -44q8-4 16 0l-2 12q-6 4-12 0Z`,['#c3cdbb','#d8c3a0','#b8c7d1','#d2b9ad'][k],.7);path(goods,`M${x-6} -42q6-2 12 0`,'none',.4);}
     const steam=el('path',{fill:'none',stroke:'currentColor','stroke-width':.6,opacity:.25},booth);
     return{...s,vendor,g:booth,awning,steam,sortY:s.y};
@@ -103,7 +108,7 @@ export function buildMarket(svg: SVGSVGElement, card: HTMLElement, options: {
   tea.querySelector('button')!.addEventListener('click',()=>{held=false;teaOpen=false;tea.classList.remove('show');options.hint('Fincan Nori’nin tezgâhında duruyor.');});
   const near=(pl:{x:number;y:number})=>booths.find(s=>Math.abs(pl.x-MX-s.x)<s.w/2+8&&pl.y>s.y+7&&pl.y<s.y+43);
   const api={
-    root,depth, bounds:{x0:MX+32,x1:MX+488,y0:322,y1:872,depthSpeed:.86},view:{x0:MX,x1:MX+520},spawn:{x:MX+260,y:350},
+    root,depth, bounds:{x0:MX+32,x1:MX+488,y0:322,y1:990,depthSpeed:.86},view:{x0:MX,x1:MX+520},spawn:{x:MX+260,y:350},
     get busy(){return teaOpen||!!paper?.isOpen||!!work?.isOpen;},
     get canExit(){return !api.busy;},
     snapshot(){return {...state,pour};},
@@ -116,9 +121,10 @@ export function buildMarket(svg: SVGSVGElement, card: HTMLElement, options: {
     // the first visit shows a title card; the walking tip waits until it has gone, so the two never sit on top of each other
     onEnter(){ const first=!state.seen; if(first){state.seen=true;setTimeout(()=>options.hint('Söğüt Pazarı. Tezgâhların arasından aşağıya doğru gezebilirsin.',false),3500);} return first; },
     help(pl:{x:number;y:number}){const s=booths.reduce((a,b)=>Math.hypot(pl.x-MX-a.x,pl.y-a.y)<Math.hypot(pl.x-MX-b.x,pl.y-b.y)?a:b);options.guide(()=>[MX+s.x,s.y-22]);guideT=5;options.hint(`${s.name}, “${s.title}” tezgâhının önünde. Sokak çıkışı avlunun en üstünde.`);},
-    prompt(pl:{x:number;y:number}){if(api.busy)return null;const s=near(pl);return s?({tea:'Nori ile çay doldur',dango:'Momo ile dango diz',paper:'Rei ile kart çiz',clay:'Sora ile fincan yerleştir'}[s.id]??null):null;},
+    prompt(pl:{x:number;y:number}){if(api.busy)return null;const s=near(pl);return s?({tea:'Nori ile çay doldur',dango:'Momo ile dango diz',paper:'Rei ile kart çiz',clay:'Sora ile fincan yerleştir',manav:'Ume’den alışveriş'}[s.id]??null):null;},
     act(pl:{x:number;y:number}){
       const s=near(pl);if(!s||api.busy)return false;options.hint(null);
+      if(s.id==='manav'){options.shop?.();return true;}
       if(s.id==='tea'){teaOpen=true;held=false;pour=Math.min(pour,.94);teaTimer=-1;tea.classList.add('show');}
       if(s.id==='paper'){paper??=createPaper(card,()=>options.hint('Çizgin burada seni bekler.'));paper.open({kicker:'Söğüt Pazarı · Rei',title:'Evine bir kart.',tip:'Çizgin hem Rei’nin tezgâhında hem evinin duvarında kalır.',example:[[80,150],[120,90],[160,150],[80,150]],guide:false,done:'Kartımı asalım',then:lines=>{state.postcard=lines;renderCard();options.memory('market-paper');options.hint('Bir kopyası Rei’de. Bir kopyası evindeki duvarda.');}});}
       if(s.id==='dango'||s.id==='clay'){work??=createHandwork(card,()=>options.hint('Tezgâh kapanmadı. İstediğin zaman devam edebilirsin.'));const kind=s.id==='dango'?'dango':'cups';work.open(kind,{then:()=>{state[s.id]=true;options.memory('market-'+s.id);options.hint(s.id==='dango'?'Momo: “Renkleri senin gibi dizdim. Tezgâhta kalsın.”':'Sora: “Fincanların arasındaki boşluk da çizginin parçası.”');}});}

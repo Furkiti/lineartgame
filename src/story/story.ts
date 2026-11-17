@@ -16,7 +16,9 @@ import { createKenta, createStuckKite, createKite, createStroke, recognise, type
 import { createFox } from './fox.ts';
 import { createCloseup } from './closeup.ts';
 import { createShodo, CHA, brush, compare } from './shodo.ts';
-import { createIcebox } from './icebox.ts';
+import { createIcebox, type IceboxResult } from './icebox.ts';
+import { createGrocer } from './greengrocer.ts';
+import { START, ITEMS, DISH_SPOTS, normalize, normalizeDishes, normalizeBasket, use, store as storeItems, makeable, canFeed, morningGift, type Item, type Topping } from './pantry.ts';
 import { createNotebook, SKETCH, type Entry } from './notebook.ts';
 import { createPaper, fitLine, fitDrawing, linePath } from './paper.ts';
 import { nextVisit, timeRate, type Visit } from './schedule.ts';
@@ -28,7 +30,7 @@ import { DAYS, nextChapter, dayComplete, eveningTarget } from './journey.ts';
 import { sfx, haptic, wakeAudio, inkRing, approach, clamp01, easeOut, backOut } from './fx.ts';
 
 type Home = {
-  root: SVGGElement; surfaces: SVGGElement; beginSleep(): void; guestSeat: number; diningGuest: { x: number; y: number; hand: Vec; head: Vec } | null; guestReach: Vec | null; offeredLast: boolean; newDay(): void; canEat: boolean; canCook: boolean; busy: boolean; made: number; setPlateDesign(pattern: 'row' | 'triangle', garnish?: boolean): void; takePlate(): void; fromIcebox(): void; windowOpen: boolean; decorateTable(paths: string[]): void;
+  root: SVGGElement; surfaces: SVGGElement; beginSleep(): void; guestSeat: number; diningGuest: { x: number; y: number; hand: Vec; head: Vec } | null; guestReach: Vec | null; offeredLast: boolean; newDay(): void; canEat: boolean; canCook: boolean; busy: boolean; made: number; setPlateDesign(pattern: 'row' | 'triangle', garnish?: boolean): void; takePlate(): void; fromIcebox(t?: Topping): void; storeDish(): Topping[]; takeDish(t: Topping[]): void; readonly plate: Topping[]; readonly topping: Topping; iceboxPrompt: string | null; windowOpen: boolean; decorateTable(paths: string[]): void;
   actors: SVGGElement; step: number; eaten: number; canSleep: boolean; prep: number; bagHung: boolean; catHome: boolean;
   setStep(n: number): void; prompt(pl: unknown): string | null;
 };
@@ -194,7 +196,7 @@ export function createStory(o: {
   const q = {
     kite: 'sad' as 'sad' | 'talked' | 'done', dinner: '' as '' | 'kenta' | 'alone', sushi: false, fox: false,
     lantern: false, toy: false, toyKind: 0, catHome: false, letter: false, fair: false, order: false, fresh: new Set<string>(), day: 1, slept: 0,
-    name: '', shopping: [] as string[], created: false, walkLearned: false, guideMet: false, met: false, homeSeen: false, homeShown: false, visitedHome: false, kentaAway: false, nightHint: false, windowMoment: false, tableDecor: false,
+    name: '', shopping: [] as string[], pantry: { ...START }, dishes: [] as Topping[], basket: [] as Item[], iceboxDay: 0, grocerMet: false, created: false, walkLearned: false, guideMet: false, met: false, homeSeen: false, homeShown: false, visitedHome: false, kentaAway: false, nightHint: false, windowMoment: false, tableDecor: false,
     visit: 'none' as Visit, invitedDay: 0, missedNote: false, reminded: false,
     day2Seen: false, day3Seen: false, souvenir: '' as '' | 'cushion' | 'water', coins: 0,
     project: '' as '' | 'tea' | 'paws' | 'lanterns', projectPlan: '' as '' | 'tea' | 'paws', projectDay: 0, gathering: false, keepsake: false, tookMemento: false,
@@ -209,6 +211,7 @@ export function createStory(o: {
   if (o.saved) { const { fresh, ...state } = o.saved.story; Object.assign(q, state); q.fresh = new Set(Array.isArray(fresh) ? fresh : []); }
   if (!Array.isArray(q.events)) q.events = [];
   if (!Array.isArray(q.shopping)) q.shopping = [];
+  q.pantry = normalize(q.pantry); q.dishes = normalizeDishes(q.dishes); q.basket = normalizeBasket(q.basket);
   if (!Array.isArray(q.shelterParts)) q.shelterParts = [];
   if (!Array.isArray(q.servedParts)) q.servedParts = [];
   if (o.saved && o.saved.story.arcVersion !== 5) {
@@ -333,19 +336,43 @@ export function createStory(o: {
   });
 
   closeup.restore(o.saved?.art.cooking);
-  // the icebox, up close: open, wipe, cut the string, lower the fish
-  let iceNote: string[] = [];
+  // the icebox, up close. Two shelves of fresh things and one of dishes you made: take something
+  // to cook or a plate to serve, or put away what you carried in (a plate, or the market bundle).
+  let iceNote: Item[] = [], iceboxPlate = false;
   const icebox = createIcebox(card, {
-    onTake: () => { home.fromIcebox(); mode = 'walk'; cam = null; afterIcebox(); },
+    onDone: (r: IceboxResult) => {
+      mode = 'walk'; cam = null;
+      if (r.mode === 'store') {
+        if (iceboxPlate) { q.dishes = [...q.dishes, ...home.storeDish()].slice(0, DISH_SPOTS); env.tip('Yemeklerin dolapta. İstediğin akşam çıkarıp yiyebilirsin.'); }
+        else { const { pantry, left } = storeItems(q.pantry, q.basket); q.pantry = pantry; q.basket = left; q.shopping = q.shopping.filter(x => q.pantry[x as Item] === 0); }
+      } else if ('cook' in r) { q.pantry = use(q.pantry, r.cook); home.fromIcebox(r.cook); closeup.setTopping(r.cook); }
+      else { const d = [...q.dishes]; for (const t of r.serve) { const i = d.indexOf(t); if (i >= 0) d.splice(i, 1); } q.dishes = d; home.takeDish(r.serve); env.tip('Tabak elinde. Masaya götür ya da dolaba geri koy.'); }
+      afterIcebox();
+    },
     onExit: () => { mode = 'walk'; cam = null; afterIcebox(); },
     onNote: (m) => { iceNote = m.filter(x => !q.shopping.includes(x)); q.shopping = [...new Set([...q.shopping, ...m])]; },
   });
   function afterIcebox() {
     if (!iceNote.length) return;
-    const names = iceNote.map(x => x === 'salatalık' ? 'Salatalık' : 'Mandalina');
+    const names = iceNote.map(x => ITEMS[x].name);
     iceNote = [];
-    think(`${names.join(' ile ')} bitmiş. Bir ara pazara uğrarım.`);
+    think(`${names.join(' ile ')} bitmiş. Pazarda Ume’ye uğrarım.`);
   }
+  // Ume's greengrocer: draw a ring around what you want; the bundle comes home in your hands
+  const grocer = createGrocer(card, {
+    onDone: (items) => {
+      mode = 'walk'; cam = null;
+      q.basket = items; q.shopping = q.shopping.filter(x => !items.includes(x as Item));
+      env.tip(q.grocerMet ? 'Bohça elinde. Evdeki dolaba yerleştir.' : 'Ume: “Komşudan para alınmaz. Bir gün bana bir çizim getirirsin.”');
+      q.grocerMet = true;
+    },
+    onExit: () => { mode = 'walk'; cam = null; },
+  });
+  // the bundle in your hands, wherever you walk
+  const sack = el('g', { 'data-grocery-bundle': '', opacity: 0, 'pointer-events': 'none' }, layers.front);
+  el('path', { d: 'M-5 -1 Q-6 -6 0 -6 Q6 -6 5 -1 Q5 4 0 4 Q-5 4 -5 -1Z', fill: '#34507a', stroke: 'currentColor', 'stroke-width': .5 }, sack);
+  el('path', { d: 'M-2 -6 q-3 -3 -1 -4 q2 0 3 3 q1 -3 3 -3 q2 1 -1 4', fill: '#34507a', stroke: 'currentColor', 'stroke-width': .45 }, sack);
+  el('path', { d: 'M-4 1 q2 -1.5 4 0 t4 0', fill: 'none', stroke: '#e8eef4', 'stroke-width': .4 }, sack);
   // ------------------------------------------------------------------ state & a tiny script runner
   let mode: 'intro' | 'walk' | 'cine' | 'brush' | 'cook' | 'sleep' | 'desk' | 'craft' = q.created ? 'walk' : 'intro';
   const syncControls = () => card.classList.toggle('controls-locked', mode !== 'walk');
@@ -701,7 +728,11 @@ export function createStory(o: {
     player.faceTo = -Math.PI / 2;
     cam = fit(IX + 330, 270, IX + 380, 350, 4);
     yield .6;
-    icebox.open();
+    // a plate in your hands goes onto the dish shelf; a market bundle onto the fresh shelves
+    iceboxPlate = home.step === 5;
+    const carrying = iceboxPlate ? { pieces: home.plate } : q.basket.length ? { items: [...q.basket] } : undefined;
+    icebox.open({ mode: carrying ? 'store' : 'take', pantry: q.pantry, dishes: q.dishes, carrying, wipe: q.iceboxDay !== q.day });
+    q.iceboxDay = q.day;
     player.faceTo = null;
   }
 
@@ -710,6 +741,7 @@ export function createStory(o: {
     player.faceTo = -0.66;
     cam = fit(IX + 250, 286, IX + 334, 340, 4);
     yield 0.9;
+    closeup.setTopping(home.topping);
     closeup.open(Math.min(3, home.step), `${q.day}:${home.made}`);
     player.faceTo = null;
   }
@@ -814,6 +846,7 @@ export function createStory(o: {
     q.slept = q.day; q.day++;
     home.newDay(); player.x = IX + 116; player.y = 356; guest?.g.remove(); guest = null; ateSeen = guestAte = 0;
     q.sushi = false; q.reminded = false; q.nightHint = false; insideKey = '';
+    const gift = morningGift(q.pantry, q.dishes); q.pantry = gift.pantry; let eggs = gift.gift;
     if ((q.visit === 'planned' || q.visit === 'waiting') && q.invitedDay < q.day) q.visit = 'missed';
     if (q.visit === 'inside') q.visit = 'done';
     q.kentaAway = false; kenta.g.style.display = ''; kenta.walkTo(KENTA_HOME[0], KENTA_HOME[1]);
@@ -824,6 +857,7 @@ export function createStory(o: {
     yield 1;
     env.banner(`${q.day}. gün`, 'Mürekkep Sokağı');
     mode = 'walk';
+    if (eggs) { eggs = false; yield 3.2; env.tip('Kapının önünde küçük bir sepet: Hana iki yumurta bırakmış. Dolaba koydum.'); }
   }
 
   // ------------------------------------------------------------------ what the action button offers on the street
@@ -1192,6 +1226,13 @@ export function createStory(o: {
       setTimeout(() => env.banner('Yaz Panayırı', 'Fenerler, davul, takoyaki kokusu…'), 900);
     },
     /** the home asks the story to take over */
+    /** the market's greengrocer stall asks the story to open */
+    shop() {
+      if (mode !== 'walk') return;
+      if (q.basket.length) { env.tip('Elinde hâlâ bir bohça var. Önce eve, dolaba.'); return; }
+      mode = 'cook'; ui.hint(playerHead, null); grocer.open(q.pantry, q.shopping as Item[]);
+    },
+    get carryingGroceries() { return q.basket.length > 0; },
     onHome(what: 'cook' | 'sleep' | 'icebox') { if (what === 'cook') run(cookIn()); else if (what === 'icebox') run(iceboxIn()); else run(sleep()); },
     onMemory(id:string){mark(id);},
     get canVisitFair() { return q.day >= 6 || q.gathering; },
@@ -1200,10 +1241,10 @@ export function createStory(o: {
     update(c: Ctx) {
       ctx = c;
       const { t, dt, P, wind } = c;
-      card.classList.toggle('modal-open', paper.isOpen || notebook.isOpen || mode === 'desk' || mode === 'craft' || closeup.isOpen || icebox.isOpen || !!env.localModal?.());
+      card.classList.toggle('modal-open', paper.isOpen || notebook.isOpen || mode === 'desk' || mode === 'craft' || closeup.isOpen || icebox.isOpen || grocer.isOpen || !!env.localModal?.());
       syncControls();
       if (guideUntil > 0 && t > guideUntil) { ui.guide(null); guideCaption(null); guideUntil = 0; }
-      ui.companionVisible(craneOut && env.isOpened() && !arrival.classList.contains('show') && !paper.isOpen && !notebook.isOpen && !closeup.isOpen && !icebox.isOpen && !env.localModal?.() && mode !== 'desk' && mode !== 'craft' && mode !== 'brush');
+      ui.companionVisible(craneOut && env.isOpened() && !arrival.classList.contains('show') && !paper.isOpen && !notebook.isOpen && !closeup.isOpen && !icebox.isOpen && !grocer.isOpen && !env.localModal?.() && mode !== 'desk' && mode !== 'craft' && mode !== 'brush');
       help.hidden = !env.isOpened() || !q.guideMet || mode !== 'walk' || !ui.companionDocked || !!env.localModal?.();
       if (mode === 'walk' && !script && q.walkLearned && !q.met && !c.inside && !c.fair && Math.abs(player.x - kenta.x) < 30) run(talk());
       refreshObjective();
@@ -1267,7 +1308,20 @@ export function createStory(o: {
 
       }
       closeup.draw(t, dt, P);
-      shodo.draw(t, dt); handwork.draw(dt); icebox.draw(t, dt);
+      shodo.draw(t, dt); handwork.draw(dt); icebox.draw(t, dt); grocer.draw(t, dt);
+      // the market bundle rides in your hands, wherever the traveller is drawn
+      sack.setAttribute('opacity', q.basket.length ? '1' : '0');
+      if (q.basket.length) {
+        if (player.g.nextSibling !== sack) player.g.after(sack);
+        const [hx, hy] = (player as unknown as { hands: Vec }).hands;
+        sack.setAttribute('transform', `translate(${f(hx)} ${f(hy + 4)}) scale(${f((player as unknown as { scale?: number }).scale ?? 1)})`);
+      }
+      // what the icebox offers right now
+      const plate = home.plate;
+      home.iceboxPrompt = home.busy || mode !== 'walk' ? null
+        : home.step === 5 ? (q.dishes.length + plate.length <= DISH_SPOTS ? 'Dolaba koy' : null)
+        : q.basket.length && home.prep !== 1 && (home.step === 0 || home.step === 6) ? 'Alışverişi yerleştir'
+        : home.step === 0 && home.prep === 0 ? 'Dolabı aç' : null;
 
       // A missed appointment leaves a recoverable trace rather than blocking the day.
       const visit = q.invitedDay > q.day ? q.visit : nextVisit(q.visit, c.tau, c.inside);
@@ -1337,7 +1391,7 @@ export function createStory(o: {
             const first = insideKey === '';
             insideKey = key;
             const counter = () => setObj(() => [IX + 292, 300], () => Math.abs(player.x - (IX + 291)) < 24, true);
-            if (key === 'icebox') { setObj(() => [IX + 354, 286], () => Math.abs(player.x - (IX + 354)) < 18, true); env.tip('Balık dolapta. Yanına gidip dolabı aç.'); }
+            if (key === 'icebox') { setObj(() => [IX + 354, 286], () => Math.abs(player.x - (IX + 354)) < 18, true); env.tip(q.dishes.length ? 'Dolapta hazır yemeğin de var. Dolabı aç, seç.' : canFeed(q.pantry, q.dishes) ? 'Malzemeler dolapta. Yanına gidip dolabı aç.' : 'Dolap boş. Söğüt Pazarı’nda Ume’ye uğrayalım.'); }
             else if (key === 'place') { counter(); env.tip('Tezgâha doğru yürü; balığı oraya bırakacaksın.'); }
             else if (key === 'cook') { counter(); env.tip('Tezgâhta suşi hazırla.'); }
             else if (key === 'take') { counter(); }
@@ -1365,7 +1419,7 @@ export function createStory(o: {
     /** called on any touch: a ring and a sound, everywhere */
     touch(e: PointerEvent) { wakeAudio(); inkRing(card, e.clientX, e.clientY); },
     // debug hooks for headless checks
-    _dbg: { q, kenta, hana, fox, closeup, icebox, shodo, handwork, run, startBrush, get mode() { return mode; }, get picked() { return picked; }, drawingAt },
+    _dbg: { q, kenta, hana, fox, closeup, icebox, grocer, shodo, handwork, run, startBrush, get mode() { return mode; }, get picked() { return picked; }, drawingAt },
   };
 }
 export type Story = ReturnType<typeof createStory>;

@@ -168,7 +168,7 @@ const atDoor = () => !inside && !inFair && !inMarket && Math.abs(player.x - DOOR
 const MARKET_GATE=657;
 const marketAlley=layer(front,{'data-market-alley':''});
 marketAlley.innerHTML='<path d="M643 344V276H671V344M648 344V287H666V344" fill="#d9cbb6" stroke="currentColor" stroke-width=".65"/><path d="M650 287H664V319H650Z" fill="#75826a" stroke="currentColor" stroke-width=".5"/><path d="M652 330h10m-11 6h12m-12 6h12" stroke="currentColor" stroke-width=".6"/><text x="657" y="301" text-anchor="middle" font-size="7" fill="#fff8e8">市</text><path d="M640 307h34v11h-34Z" fill="#fff8e8" stroke="currentColor" stroke-width=".5"/><text x="657" y="315" text-anchor="middle" font-size="6">Pazar</text>';
-const market=buildMarket(svg,card,{saved:saved?.market,homeSurface:home.surfaces,
+const market=buildMarket(svg,card,{saved:saved?.market,homeSurface:home.surfaces,shop:()=>story?.shop(),
   hint:(text,sticky)=>ui?.hint(()=>[player.x,player.y-54],text,sticky),
   memory:id=>story?.onMemory(id),guide:at=>ui?.guide(at)});
 svg.insertBefore(market.root,home.root);
@@ -384,7 +384,9 @@ run((t, dt) => {
   player.reach = inside ? home.reach : null;
   player.recline = inside ? home.recline : 0;
   player.sitting = Math.max(inside ? home.sitting : 0, story?.sitting ?? 0);
-  player.pose = inside ? home.pose : { work: 0, chop: 0, hold: 0 };
+  const pose0 = inside ? home.pose : { work: 0, chop: 0, hold: 0 };
+  // the market bundle is carried in both hands
+  player.pose = story?.carryingGroceries ? { ...pose0, hold: Math.max(pose0.hold, 1) } : pose0;
   // the alley: past its mouth you can walk in, growing smaller, the street falling behind
   let alleyDepth = 0;
   if(inMarket){

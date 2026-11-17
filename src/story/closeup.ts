@@ -7,6 +7,7 @@
 //   4 · plate them      — drag each piece from the board onto the geta
 import { f, pt, type Vec } from '../lib/ink.ts';
 import { plateGeometry, freePlateSlot, type PlateDesign } from './plating.ts';
+import { LOOK, type Topping } from './pantry.ts';
 import { rgb, hex, mix } from '../village/kit.ts';
 import { sfx, haptic, clamp01, lerp, easeOut, easeInOut, backOut, elasticOut, approach } from './fx.ts';
 
@@ -104,13 +105,13 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit, onDes
   const clip = mk('clipPath', { id: clipId }, svg);
   const clipRect = mk('path', {}, clip);
   const block = fill(blockG, '', rgb(C.salmon), 1.8);
-  const blockFat = ink(blockG, '', 2.2, { stroke: '#fff3e6', 'clip-path': `url(#${clipId})` });
+  const blockFat = ink(blockG, '', 2.2, { stroke: '#fff3e6', 'clip-path': `url(#${clipId})`, 'data-stripe': 1 });
   const incision = ink(blockG, '', 1, { stroke: '#ab4c3b', opacity: 0 });
   const cutLine = mk('path', { fill: 'none', stroke: INK, 'stroke-width': 1.4, 'stroke-dasharray': '5 4', opacity: 0 }, blockG);
   const slices = [0, 1, 2].map((i) => {
     const g = mk('g', { opacity: 0 }, world);
     const body = fill(g, `M0 0 L${BLOCK.slice} 0 L${BLOCK.slice} ${BLOCK.y1 - BLOCK.y0} L0 ${BLOCK.y1 - BLOCK.y0}Z`, rgb(C.salmon), 1.5);
-    ink(g, `M2 10 L${BLOCK.slice - 2} 4 M2 24 L${BLOCK.slice - 2} 18 M2 38 L${BLOCK.slice - 2} 32`, 1.6, { stroke: '#fff3e6' });
+    ink(g, `M2 10 L${BLOCK.slice - 2} 4 M2 24 L${BLOCK.slice - 2} 18 M2 38 L${BLOCK.slice - 2} 32`, 1.6, { stroke: '#fff3e6', 'data-stripe': 1 });
     return { g, body, t: -1 };
   });
 
@@ -123,7 +124,7 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit, onDes
     const dots = ink(g, '', 1.2, { opacity: 0.7 });
     const top = mk('g', { opacity: 0 }, g);
     const topBody = fill(top, 'M-21 -14 Q-2 -26 22 -16 Q25 -10 20 -8 Q0 -14 -20 -6 Q-25 -8 -21 -14Z', rgb(C.salmon), 1.5);
-    ink(top, 'M-12 -15 q4 -4 9 -5 M2 -17 q5 -2 10 -1 M-4 -11 q6 -3 12 -3', 1.4, { stroke: '#fff3e6' });
+    ink(top, 'M-12 -15 q4 -4 9 -5 M2 -17 q5 -2 10 -1 M-4 -11 q6 -3 12 -3', 1.4, { stroke: '#fff3e6', 'data-stripe': 1 });
     g.setAttribute('data-nigiri', i);
     return { g, shadow, body, dots, top, topBody, shape: 0, drape: -1, home: MOUND[i] as Vec, pos: [...MOUND[i]] as Vec, plated: -1, slot: -1, lift: 0 };
   });
@@ -234,6 +235,7 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit, onDes
   const after = (s: number, fn: () => void) => later.push({ at: now + s, fn });
 
   const STEP_TITLES = ['Pirinci karıştır', 'Balığı dilimle', 'Nigiri şekillendir', 'Tabağa diz'];
+  const SLICE_TITLE: Record<Topping, string> = { somon: 'Balığı dilimle', tamago: 'Tamagoyu dilimle', kyuri: 'Salatalığı dilimle' };
   const STEP_TIPS = ['Kapta yavaş daireler çiz. Pirinç fırçanın altında dönsün.', 'Basılı tut; bıçak yavaşça insin. Aşağı sürükleyebilirsin de.', 'Boş bir yere basılı tut. Bırakınca ellerin de dursun.', 'Nigirileri tabaktaki soluk izlere sürükle.'];
   function frameTo(r: readonly number[], instant = false) {
     camFrom = { ...cam }; camTo = { x0: r[0], y0: r[1], x1: r[2], y1: r[3] }; camT = instant ? 1 : 0;
@@ -328,8 +330,20 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit, onDes
   addEventListener('blur', () => up(false));
   back.addEventListener('click', () => { if (open) api.close(); });
 
+  // what is being made: salmon, tamago or cucumber share the same steps, in their own colours
+  let topC = C.salmon;
+  function setTopping(t: Topping) {
+    const look = LOOK[t]; topC = hex(look.fill);
+    slices.forEach(s => s.body.setAttribute('fill', look.fill));
+    nigiri.forEach(n => n.topBody.setAttribute('fill', look.fill));
+    svg.querySelectorAll('[data-stripe]').forEach(n => n.setAttribute('stroke', look.line));
+    svg.setAttribute('data-topping', t);
+    STEP_TITLES[1] = SLICE_TITLE[t];
+  }
+
   // ------------------------------------------------------------------ api
   const api = {
+    setTopping,
     get isOpen() { return open; },
     /** for headless checks: a close-up point in client pixels */
     _client(w: Vec): Vec { const r = svg.getBoundingClientRect(); return [r.left + ox + w[0] * scale, r.top + oy + w[1] * scale]; },
@@ -385,7 +399,7 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit, onDes
       // colours of the hour
       counterTop.setAttribute('fill', tint(C.wood, P)); counterEdge.setAttribute('fill', tint(C.woodDark, P)); counterFace.setAttribute('fill', tint(C.woodFace, P));
       tubSide.setAttribute('fill', tint(C.tub, P)); board.setAttribute('fill', tint(C.board, P)); getaTop.setAttribute('fill', tint(C.geta, P));
-      block.setAttribute('fill', tint(C.salmon, P, 0.35)); [rightHand, leftHand, leftFront].forEach((h) => h.tint(P));
+      block.setAttribute('fill', tint(topC, P, 0.35)); [rightHand, leftHand, leftFront].forEach((h) => h.tint(P));
       void bands;
 
       // ---------------- 1 · rice

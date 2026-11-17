@@ -20,7 +20,7 @@ const step=n=>d.page.evaluate(n=>__step(n),n);
  // restore promotes a fish held during an interrupted door animation; test actual carry state through the icebox.
  p=await stage(seed({}, {step:0,prep:0},{x:1654}));
  await d.icebox({shot:'.local/v8-icebox'});await step(3);
- assert.deepEqual(await p.evaluate(()=>__game.story._dbg.q.shopping),['salatalık'],'a touched outline becomes a note for the market');
+ assert.deepEqual(await p.evaluate(()=>__game.story._dbg.q.shopping),['mandalina'],'a touched outline becomes a note for the market');
  await p.evaluate(()=>{__game.player.x=1554;__game.player.y=356;});await step(.7);
  assert.equal(await p.evaluate(()=>__game.home.prep),1,'left edge must not place fish');
  await p.evaluate(()=>__game.player.x=1591);await step(.65);

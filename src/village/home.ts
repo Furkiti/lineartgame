@@ -6,6 +6,7 @@
 // so it shares the camera, the ink colour and the paper colour of the hour.
 import { el, pen, shape, blot, f, pt, PAPER, type Vec } from '../lib/ink.ts';
 import { closestSeat, mealTurn, biteMotion, SEATS } from '../story/dining.ts';
+import { LOOK, type Topping } from '../story/pantry.ts';
 import { W, BASE, SP, lerp, clamp, smooth, ease, easeOut, oval, rgb, hex, mix } from './kit.ts';
 
 export const IX = 1300;          // where the interior starts in scene x
@@ -241,7 +242,7 @@ export function buildHome(svg: SVGSVGElement) {
   C_(iceInside, rect(341, 289, 367, 311.4), rgb(COL.woodDark), SP * 0.6);
   P_(iceInside, 'M341 300 L367 300', SP * 0.5);
   const iceFish = el('g', {}, iceInside);
-  C_(iceFish, 'M345 297.4 L357 297.4 L357 293 L345 293Z', rgb(COL.salmon), SP * 0.5);
+  const iceFishBody = C_(iceFish, 'M345 297.4 L357 297.4 L357 293 L345 293Z', rgb(COL.salmon), SP * 0.5);
   P_(iceFish, 'M347 297 L349 293.4 M351 297 L353 293.4', SP * 0.4).setAttribute('stroke', '#fff3e6');
   C_(iceInside, oval(361, 296, 2, 1.6), PAPER, SP * 0.4);
   C_(iceInside, 'M344 309 Q352 305.6 360 308.6 Q352 310 344 309Z', rgb(hex('#8fae5a')), SP * 0.5);
@@ -284,7 +285,7 @@ export function buildHome(svg: SVGSVGElement) {
 
   // the fish you carry from the icebox, the bundle on its peg, a cat asleep on a cushion
   const carryFish = el('g', { opacity: 0 }, top);
-  C_(carryFish, 'M-6 -2.6 L6 -2.6 L6 2 L-6 2Z', rgb(COL.salmon), SP * 0.5);
+  const carryBody = C_(carryFish, 'M-6 -2.6 L6 -2.6 L6 2 L-6 2Z', rgb(COL.salmon), SP * 0.5);
   C_(carryFish, 'M-6.6 -3 L-1 -3 L-2 2.6 L-6.6 2.6Z', PAPER, SP * 0.45);
   const hung = el('g', { opacity: 0 }, props);
   const hungBody = C_(hung, 'M-1 -7 Q-8 -6 -7.6 1 Q-7 8 0 8 Q7 8 7.4 1 Q7.6 -6 1 -7Z', rgb(COL.red), SP * 0.7);
@@ -319,10 +320,18 @@ export function buildHome(svg: SVGSVGElement) {
     P_(rice, 'M-1.6 -1.4 l0.5 0 M1 -2.2 l0.5 0 M0.4 -0.8 l0.5 0', SP * 0.4);
     const slice = el('g', {}, g);
     const tuna = false; // all three are salmon, cut from one block
-    C_(slice, 'M-4 -2.4 Q0 -4.8 4.2 -2.8 Q4.6 -1.5 3.6 -1.1 Q0 -2.4 -3.7 -0.9 Q-4.6 -1.3 -4 -2.4Z', rgb(tuna ? COL.tuna : COL.salmon), SP * 0.55);
-    if (!tuna) el('path', { d: 'M-2.4 -2.4 q1 -0.8 2 -1 M0.6 -2.8 q1 -0.5 2 -0.4', fill: 'none', stroke: '#fff3e6', 'stroke-width': 0.45, 'stroke-linecap': 'round' }, slice);
-    return { g, rice, slice, eaten: 0, tuna };
+    const sliceFill = C_(slice, 'M-4 -2.4 Q0 -4.8 4.2 -2.8 Q4.6 -1.5 3.6 -1.1 Q0 -2.4 -3.7 -0.9 Q-4.6 -1.3 -4 -2.4Z', rgb(tuna ? COL.tuna : COL.salmon), SP * 0.55);
+    const sliceLine = el('path', { d: 'M-2.4 -2.4 q1 -0.8 2 -1 M0.6 -2.8 q1 -0.5 2 -0.4', fill: 'none', stroke: '#fff3e6', 'stroke-width': 0.45, 'stroke-linecap': 'round' }, slice);
+    return { g, rice, slice, sliceFill, sliceLine, eaten: 0, tuna };
   });
+  // what is being made or served: salmon, tamago or cucumber (each piece can differ when served)
+  let topping: Topping = 'somon';
+  function paintPiece(i: number, t: Topping) { const L = LOOK[t]; pieces[i].sliceFill.setAttribute('fill', L.fill); pieces[i].sliceLine.setAttribute('stroke', L.line); pieces[i].g.setAttribute('data-topping', t); }
+  function setTopping(t: Topping) {
+    topping = t; const L = LOOK[t];
+    [iceFishBody, carryBody].forEach(n => n.setAttribute('fill', L.fill)); blockLines.setAttribute('stroke', L.line);
+    pieces.forEach((_, i) => paintPiece(i, t));
+  }
   const floatText = text(fx, 0, 0, '', 9, { weight: 600 });
   floatText.setAttribute('font-style', 'italic');
   floatText.setAttribute('font-family', '"Iowan Old Style", Georgia, serif');
@@ -379,7 +388,31 @@ export function buildHome(svg: SVGSVGElement) {
     get doorOpen() { return doorOpen; },
     onEnter() { doorOpen = 0; api.doorTarget = 0; api.exitIntent = false; },
     /** the fish came out of the icebox close-up: it rises into your hands and the door shuts */
-    fromIcebox() { if (prep === 0) iceT = 0.8; },
+    fromIcebox(t: Topping = 'somon') { if (prep === 0) { setTopping(t); iceT = 0.8; } },
+    get topping() { return topping; },
+    /** the pieces on the plate you carry (not yet eaten) */
+    get plate(): Topping[] { return step === 5 ? pieces.filter(pc => pc.eaten < 1).map(pc => (pc.g.getAttribute('data-topping') as Topping) || topping) : []; },
+    setTopping,
+    /** a plate of dishes you put away comes out again: carried, as if just made */
+    takeDish(tops: Topping[]) {
+      if (step !== 0 || prep !== 0 || !tops.length) return;
+      const n = Math.min(3, tops.length), skip = 3 - n;
+      mealOrder = [0, 1, 2]; eaten = skip; anim = -1;
+      pieces.forEach((pc, i) => { pc.eaten = i < skip ? 1 : 0; pc.g.setAttribute('transform', ''); if (i >= skip) paintPiece(i, tops[i - skip]); });
+      step = 5; top.appendChild(dish);
+    },
+    /** the plate you carried goes into the icebox: the kitchen is ready for something else */
+    storeDish(): Topping[] {
+      if (step !== 5) return [];
+      const kept = pieces.filter(pc => pc.eaten < 1).map(pc => (pc.g.getAttribute('data-topping') as Topping) || topping);
+      // a finished batch: the next one at the board starts fresh
+      step = 0; prep = 0; eaten = 0; anim = -1; made++; iceFish.setAttribute('opacity', '1');
+      pieces.forEach((pc) => { pc.eaten = 0; pc.g.setAttribute('transform', ''); });
+      props.appendChild(dish);
+      return kept;
+    },
+    /** what the icebox offers right now (the story decides) */
+    iceboxPrompt: null as string | null,
     takePlate() { if (step === 4) { step = 5; top.appendChild(dish); } },
     bounds: { x0: IX + 14, x1: IX + IW - 14 },
     view: { x0: IX - 14, x1: IX + IW + 14 },
@@ -400,11 +433,13 @@ export function buildHome(svg: SVGSVGElement) {
     canSleep: false,
     canCook: true,
     canEat: true,
-    snapshot() { return { step, prep, eaten, made, bagHung, catHome: api.catHome, windowOpen: api.windowOpen, plateLayout: api.plateLayout, plateGarnish: api.plateGarnish }; },
+    snapshot() { return { topping, pieces: pieces.map(pc => pc.g.getAttribute('data-topping') || topping), step, prep, eaten, made, bagHung, catHome: api.catHome, windowOpen: api.windowOpen, plateLayout: api.plateLayout, plateGarnish: api.plateGarnish }; },
     restore(s: Record<string, any>) {
       step = Math.max(0, Math.min(6, Number(s.step) || 0)); prep = Math.max(0, Math.min(2, Number(s.prep) || 0));
       eaten = Math.max(0, Math.min(3, Number(s.eaten) || 0)); made = Number(s.made) || 0; bagHung = !!s.bagHung; api.catHome = !!s.catHome; api.windowOpen = !!s.windowOpen; api.plateLayout = s.plateLayout === 'triangle' ? 'triangle' : 'row'; api.plateGarnish = !!s.plateGarnish;
       anim = iceT = placeT = bagT = eatT = resetT = -1;
+      setTopping(['somon', 'tamago', 'kyuri'].includes(s.topping) ? s.topping : 'somon');
+      if (Array.isArray(s.pieces)) s.pieces.forEach((t: string, i: number) => { if (i < 3 && ['somon', 'tamago', 'kyuri'].includes(t)) paintPiece(i, t as Topping); });
       pieces.forEach((pc, i) => { pc.eaten = i < eaten ? 1 : 0; });
       (step === 5 ? top : props).appendChild(dish);
       if (step === 0 && prep === 1) prep = 2;
@@ -422,7 +457,7 @@ export function buildHome(svg: SVGSVGElement) {
       const w = where(pl);
       if (w === 'door') return api.walkExit || step === 5 || prep === 1 ? null : 'Dışarı çık';
       if (w === 'peg') return null;
-      if (w === 'icebox') return api.canCook && prep === 0 && step === 0 ? 'Dolabı aç' : null;
+      if (w === 'icebox') return api.iceboxPrompt;
       if (w === 'cook' && prep === 1) return null;
       if (w === 'cook' && step < 4 && prep === 2) return step === 0 ? 'Suşi hazırla' : 'Suşiye devam et';
       if (w === 'cook' && step === 4) return null;
@@ -499,7 +534,7 @@ export function buildHome(svg: SVGSVGElement) {
       tableTop.setAttribute('fill', tint(COL.wood, P));
       getaTop.setAttribute('fill', tint(COL.wood, P));
       plateLeaf.setAttribute('opacity',api.plateGarnish?'1':'0');plateGinger.setAttribute('opacity',api.plateGarnish?'1':'0');
-      block.setAttribute('fill', tint(COL.salmon, P, 0.35));
+      block.setAttribute('fill', tint(hex(LOOK[topping].fill), P, 0.35));
       block.setAttribute('opacity', prep === 2 ? '1' : '0'); blockLines.setAttribute('opacity', prep === 2 ? '1' : '0');
       hungBody.setAttribute('fill', tint(COL.red, P));
 
@@ -608,7 +643,7 @@ export function buildHome(svg: SVGSVGElement) {
         const sx = lerp(PILE[0] + i * 0.6, SLOT_X[i], se), sy = pieceY + lerp(PILE[1] - i * 0.7, -2.6, se) - 7 * Math.sin(Math.PI * se) + onPlate;
         pc.slice.setAttribute('transform', `translate(${f(sx)} ${f(sy)})`);
         pc.slice.setAttribute('opacity', f(cut));
-        const gone = step === 6 ? clamp(pc.eaten, 0, 1) : 0;
+        const gone = step >= 5 ? clamp(pc.eaten, 0, 1) : 0;
         pc.g.setAttribute('opacity', f(riceP > 0 || cut ? 1 - gone : 0));
         if (eatT < 0 || i !== mealOrder[eaten]) {
           if (pc.g.parentNode !== dish) dish.appendChild(pc.g);

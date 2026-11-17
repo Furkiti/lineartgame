@@ -1,12 +1,16 @@
-// The wooden icebox, up close. Each thing you do in it is one brush verb:
-//   1 · open   — take the brass handle and swing the door open
-//   2 · wipe   — the inside has misted over; wipe it with your finger to see the shelves
-//   3 · cut    — the salmon is wrapped in paper and tied: one stroke across the string cuts it
-//   4 · take   — lower the fish onto the bamboo tray below
-// What is missing is drawn as a dashed outline, the way the notebook draws unfinished things:
-// touch one and the traveller makes a mental note (that is the shopping list for the market).
+// The wooden icebox, up close. Two shelves for fresh things, one shelf for dishes you cooked.
+// Everything you do in it is one brush verb:
+//   open   — take the brass handle and swing the door open
+//   wipe   — the first time each day it has misted over: wipe it with your finger
+//   cut    — salmon comes wrapped in paper and tied: one stroke across the string cuts it
+//   move   — drag a thing to the bamboo tray (to cook it or serve it), or from the tray to its
+//            dashed place on a shelf (to put it away). Every kind has its own outlined places,
+//            like a well-kept icebox: things only settle where they belong.
+// Empty places stay dashed, the way the notebook draws unfinished things; touching the outline
+// of something you have none of makes a mental note — the shopping list for the greengrocer.
 import { f, pt, type Vec } from '../lib/ink.ts';
 import { sfx, haptic, clamp01, lerp, easeOut, easeInOut, backOut, approach } from './fx.ts';
+import { ITEMS, ITEM_IDS, LOOK, PIECES, recipeFor, type Item, type Topping, type Pantry } from './pantry.ts';
 
 const NS = 'http://www.w3.org/2000/svg';
 type Attrs = Record<string, string | number>;
@@ -21,22 +25,38 @@ const ink = (g: Element, d: string, w = 2, extra: Attrs = {}) => mk('path', { d,
 const fill = (g: Element, d: string, c: string, w = 2, extra: Attrs = {}) => mk('path', { d, fill: c, stroke: INK, 'stroke-width': w, 'stroke-linecap': 'round', 'stroke-linejoin': 'round', ...extra }, g);
 const rect = (x0: number, y0: number, x1: number, y1: number) => `M${x0} ${y0}H${x1}V${y1}H${x0}Z`;
 const ell = (cx: number, cy: number, rx: number, ry: number) => `M${f(cx - rx)} ${f(cy)}A${f(rx)} ${f(ry)} 0 1 0 ${f(cx + rx)} ${f(cy)}A${f(rx)} ${f(ry)} 0 1 0 ${f(cx - rx)} ${f(cy)}Z`;
-const C = { wood: '#d9b380', woodLight: '#e4c493', woodDark: '#b98c58', zinc: '#dcd8cc', brass: '#c9a24a', ice: '#e3eeec', salmon: '#ec8c5f', paper: '#f5ead2', plum: '#c8423a', ginger: '#f2b3b0', bamboo: '#d8bf86' };
+const C = { wood: '#d9b380', woodLight: '#e4c493', woodDark: '#b98c58', zinc: '#dcd8cc', brass: '#c9a24a', ice: '#e3eeec', paper: '#f5ead2', bamboo: '#d8bf86', lacquer: '#7a2f2a', orange: '#f0a046', leaf: '#6e9a4e', string: '#8a5a3c' };
 
 // the box, in a 320 × 540 sheet
 const BOX = { x0: 36, x1: 284, y0: 56, y1: 490 };
 const IN = { x0: 52, x1: 268, y0: 164, y1: 470 };     // the food compartment behind the door
 const HINGE = 50, HANDLE: Vec = [252, 320];
-const PKG = { cx: 112, cy: 237, w: 78, h: 34 };       // the paper-wrapped salmon on the top shelf
 const TRAY: Vec = [160, 516];
 
-export type IceboxMissing = 'salatalık' | 'mandalina';
-const MISSING: { id: IceboxMissing; name: string; at: Vec; d: string }[] = [
-  { id: 'salatalık', name: 'Salatalık', at: [244, 344], d: 'M210 356 Q214 344 258 334 Q266 334 264 340 Q222 356 214 360 Q208 360 210 356Z M214 346 Q218 334 254 324 Q262 324 260 330 Q224 344 218 350 Q212 350 214 346Z' },
-  { id: 'mandalina', name: 'Mandalina', at: [112, 446], d: `${ell(92, 452, 14, 12)} ${ell(124, 454, 14, 12)} ${ell(108, 434, 13, 11)} M108 423 q4 -6 10 -5` },
-];
+// every kind of thing has its own outlined places
+type Kind = Item | 'dish';
+const SPOTS: Record<Kind, Vec[]> = {
+  somon: [[90, 244], [166, 244]],
+  mandalina: [[216, 247], [246, 247]],
+  yumurta: [[78, 349], [100, 349], [122, 349], [144, 349]],
+  'salatalık': [[214, 338], [214, 355]],
+  dish: [[84, 447], [111, 447], [138, 447], [184, 447], [211, 447], [238, 447]],
+};
+// the outline of one thing, drawn around its own origin
+const SHAPE: Record<Kind, string> = {
+  somon: rect(-32, -15, 32, 15),
+  mandalina: ell(0, 0, 13, 12),
+  yumurta: ell(0, 0, 9, 11.5),
+  'salatalık': 'M-44 2 Q-46 -6 -36 -7 L38 -7 Q46 -6 45 1 Q44 7 36 7 L-36 7 Q-44 7 -44 2Z',
+  dish: 'M-12 3 Q-13 -9 0 -9 Q13 -9 12 3Z',
+};
+export type IceboxResult =
+  | { mode: 'take'; cook: Topping; used: Item[] }
+  | { mode: 'take'; serve: Topping[] }
+  | { mode: 'store' };
+export type IceboxOpen = { mode: 'take' | 'store'; pantry: Pantry; dishes: Topping[]; carrying?: { items?: Item[]; pieces?: Topping[] }; wipe: boolean };
 
-export function createIcebox(card: HTMLElement, { onTake, onExit, onNote }: { onTake: () => void; onExit: () => void; onNote: (missing: IceboxMissing[]) => void }) {
+export function createIcebox(card: HTMLElement, { onDone, onExit, onNote }: { onDone: (r: IceboxResult) => void; onExit: () => void; onNote: (missing: Item[]) => void }) {
   const svg = mk('svg', { class: 'icebox-view', viewBox: '0 0 320 540', preserveAspectRatio: 'xMidYMid meet', 'data-icebox': '' }) as SVGSVGElement;
   svg.style.display = 'none'; svg.style.opacity = '0';
   card.appendChild(svg);
@@ -59,60 +79,71 @@ export function createIcebox(card: HTMLElement, { onTake, onExit, onNote }: { on
   ink(world, `M${BOX.x0 + 6} ${BOX.y0 + 6}H${BOX.x1 - 6}`, .7, { opacity: .4 });
   // the ice chamber, open behind a little lattice: a block of ice, sweating
   fill(world, rect(52, 70, 268, 150), '#c9d6d2', 2);
-  const iceBlock = fill(world, 'M70 146 L76 84 L244 80 L250 146Z', C.ice, 2);
+  fill(world, 'M70 146 L76 84 L244 80 L250 146Z', C.ice, 2);
   ink(world, 'M120 92 l10 22 l-6 14 M190 88 l-8 18 l12 20 M154 100 l4 10', 1.1, { opacity: .55 });
   ink(world, 'M84 94 l18 -2 M214 92 l20 -1', 2.2, { stroke: '#ffffff', opacity: .8 });
   const lattice: string[] = []; for (let x = 70; x < 268; x += 22) lattice.push(`M${x} 70V150`);
   ink(world, lattice.join('') + 'M52 110H268', 2.6, { stroke: C.woodDark });
   ink(world, lattice.join('') + 'M52 110H268', .8);
   const drips = [0, 1, 2].map(() => mk('ellipse', { rx: 1.6, ry: 2.4, fill: '#cfe3e0', stroke: INK, 'stroke-width': .8, opacity: 0 }, world));
-  void iceBlock;
 
-  // the food compartment, zinc-lined, two shelves
+  // the food compartment, zinc-lined: two shelves of fresh things, a lower one for dishes
   fill(world, rect(IN.x0, IN.y0, IN.x1, IN.y1), C.zinc, 2);
   ink(world, 'M52 262H268 M52 366H268', 3.2);
   ink(world, 'M52 268H268 M52 372H268', .7, { opacity: .45 });
-  const contents = mk('g', {}, world);
-  // top shelf: soy sauce, a saucer of pickled ginger
-  fill(contents, 'M200 262 L200 214 Q200 204 206 200 L206 190 L216 190 L216 200 Q222 204 222 214 L222 262Z', '#5b4237', 1.8);
-  fill(contents, rect(203, 222, 219, 244), PAPER, 1.2);
-  mk('text', { x: 211, y: 238, 'text-anchor': 'middle', 'font-size': 11, 'font-family': '"Hiragino Mincho ProN","Yu Mincho","Noto Serif JP",serif', fill: INK }, contents).textContent = '醤';
-  fill(contents, 'M234 262 Q234 254 252 254 Q270 254 268 262Z', PAPER, 1.6);
-  fill(contents, 'M240 256 q6 -8 12 -2 q6 -6 10 2Z', C.ginger, 1.2);
-  // middle shelf: a bowl of eggs, the plum jar with a blank label
-  fill(contents, ell(84, 340, 11, 13) + ell(104, 338, 11, 13) + ell(94, 330, 11, 13), PAPER, 1.6);
-  fill(contents, 'M66 344 Q70 366 94 366 Q118 366 122 344Z', '#b98c58', 1.8);
-  fill(contents, 'M156 366 L156 318 Q156 312 162 312 L194 312 Q200 312 200 318 L200 366Z', '#eef3f0', 1.6, { opacity: .95 });
-  [[166, 352], [182, 356], [174, 340], [190, 340], [168, 326]].forEach(([x, y]) => fill(contents, ell(x, y, 6, 5.4), C.plum, 1.2));
-  fill(contents, rect(154, 304, 202, 314), C.woodDark, 1.6);
-  fill(contents, rect(164, 330, 192, 348), PAPER, 1.1, { 'data-jar-label': '' });
-  // bottom: a covered miso pot
-  fill(contents, 'M196 470 Q192 430 230 428 Q268 430 264 470Z', '#a9774b', 1.8);
-  fill(contents, 'M194 430 Q230 418 266 430 Q230 438 194 430Z', '#c49a66', 1.6);
-  ink(contents, 'M230 420 v-6', 3);
+  const fixtures = mk('g', {}, world);
+  // a little wooden egg rack, two lacquer trays for dishes, a paper tag
+  fill(fixtures, 'M66 362H156V366H66Z', C.woodDark, 1.4);
+  fill(fixtures, rect(68, 456, 154, 462) + rect(170, 456, 256, 462), C.lacquer, 1.6);
+  fill(fixtures, 'M134 382H186V396H134Z', PAPER, 1.1);
+  mk('text', { x: 160, y: 392.5, 'text-anchor': 'middle', 'font-size': 9, 'font-style': 'italic', 'font-family': '"Iowan Old Style", Georgia, serif', fill: INK }, fixtures).textContent = 'yemeklerim';
 
-  // what is missing: dashed outlines, breathing a little
-  const ghosts = MISSING.map((m) => {
-    const g = mk('g', { 'data-missing': m.id, style: 'cursor:pointer' }, contents);
-    mk('path', { d: m.d, fill: 'transparent', stroke: INK, 'stroke-width': 1.5, 'stroke-dasharray': '4 4', 'stroke-linecap': 'round', opacity: .55 }, g);
-    const note = mk('g', { opacity: 0 }, g);
-    const nw = m.name.length * 6.4 + 34;
-    fill(note, `M${m.at[0] - nw / 2} ${m.at[1] - 44} h${nw} v20 h${-nw / 2 + 4} l-4 6 l-4 -6 h${-nw / 2 + 4}Z`, PAPER, 1.1);
-    mk('text', { x: m.at[0], y: m.at[1] - 30, 'text-anchor': 'middle', 'font-size': 11, 'font-style': 'italic', 'font-family': '"Iowan Old Style", Georgia, serif', fill: INK }, note).textContent = `${m.name} bitmiş`;
-    return { ...m, g, note, t: -1 };
-  });
+  // dashed places for every kind; the ones of something you have none of can be touched
+  const outlines = mk('g', {}, world);
+  const places = (Object.keys(SPOTS) as Kind[]).flatMap(kind => SPOTS[kind].map((at, i) => {
+    const n = mk('path', { d: SHAPE[kind], transform: `translate(${at[0]} ${at[1]})`, fill: 'transparent', stroke: INK, 'stroke-width': 1.3, 'stroke-dasharray': '4 4', 'stroke-linecap': 'round', opacity: .5, 'data-place': kind, 'data-place-i': i }, outlines);
+    return { kind, i, at, n };
+  }));
+  const noteG = mk('g', { opacity: 0, 'pointer-events': 'none' }, world);
+  const noteBody = fill(noteG, '', PAPER, 1.1);
+  const noteText = mk('text', { 'text-anchor': 'middle', 'font-size': 11, 'font-style': 'italic', 'font-family': '"Iowan Old Style", Georgia, serif', fill: INK }, noteG);
+  let noteT = -1, noteAt: Vec = [0, 0];
+  function note(at: Vec, text: string) {
+    noteText.textContent = text; noteAt = [Math.max(70, Math.min(250, at[0])), at[1] - 22]; noteT = 0;
+    const w = text.length * 5.6 + 22;
+    noteBody.setAttribute('d', `M${f(-w / 2)} -16 h${f(w)} v20 h${f(-w / 2 + 4)} l-4 6 l-4 -6 h${f(-w / 2 + 4)}Z`);
+    noteText.setAttribute('x', '0'); noteText.setAttribute('y', '-2');
+  }
 
-  // the salmon in its paper, tied with a string
-  const fish = mk('g', { 'data-icebox-fish': '' }, contents);
-  const fishBody = fill(fish, rect(-34, -13, 34, 15), C.salmon, 1.8);
-  ink(fish, 'M-26 12 L-14 -10 M-12 12 L0 -10 M2 12 L14 -10 M16 12 L26 -6', 2.2, { stroke: '#fff3e6' });
-  const wrapL = fill(fish, 'M-39 -17 L0 -17 L0 17 L-39 17Z', C.paper, 1.8);
-  const wrapR = fill(fish, 'M0 -17 L39 -17 L39 17 L0 17Z', C.paper, 1.8);
-  const wrapFold = ink(fish, 'M-39 -17 L-30 -8 M39 -17 L30 -8 M-39 17 L-30 8 M39 17 L30 8', .9, { opacity: .55 });
-  const stringH = [ink(fish, 'M-39 1 L0 1', 1.6, { stroke: '#8a5a3c' }), ink(fish, 'M0 1 L39 1', 1.6, { stroke: '#8a5a3c' })];
-  const stringV = [ink(fish, 'M0 -17 L0 1', 1.6, { stroke: '#8a5a3c' }), ink(fish, 'M0 1 L0 17', 1.6, { stroke: '#8a5a3c' })];
-  const bow = ink(fish, 'M0 -17 q-9 -9 -12 -2 q4 4 12 2 q9 -9 12 -2 q-4 4 -12 2', 1.4, { stroke: '#8a5a3c' });
-  void fishBody;
+  // the things themselves: on the shelves they sit behind the mist and the door; on the tray, or
+  // in your hand, they come to the front
+  const things = mk('g', {}, world);
+  type Thing = { kind: Kind; topping?: Topping; g: SVGGElement; pos: Vec; spot: number; tray: number; isNew: boolean; tied: boolean; cutT: number; parts?: { wrapL: SVGPathElement; wrapR: SVGPathElement; fold: SVGPathElement; strings: SVGPathElement[]; bits: SVGPathElement[] }; lift: number };
+  let list: Thing[] = [];
+  function drawThing(kind: Kind, topping?: Topping) {
+    const g = mk('g', { 'data-thing': kind, ...(topping ? { 'data-topping': topping } : {}) }, things);
+    const t: Thing = { kind, topping, g, pos: [0, 0], spot: -1, tray: -1, isNew: false, tied: false, cutT: -1, lift: 0 };
+    if (kind === 'somon') {
+      fill(g, rect(-27, -11, 27, 13), LOOK.somon.fill, 1.8);
+      ink(g, 'M-20 10 L-10 -8 M-8 10 L2 -8 M4 10 L14 -8 M16 10 L22 -2', 2, { stroke: LOOK.somon.line });
+      const wrapL = fill(g, 'M-32 -15 L0 -15 L0 15 L-32 15Z', C.paper, 1.8), wrapR = fill(g, 'M0 -15 L32 -15 L32 15 L0 15Z', C.paper, 1.8);
+      const fold = ink(g, 'M-32 -15 L-24 -7 M32 -15 L24 -7 M-32 15 L-24 7 M32 15 L24 7', .9, { opacity: .55 });
+      const strings = ['M-32 1 L32 1', 'M0 -15 L0 15', 'M0 -15 q-8 -8 -11 -2 q4 4 11 2 q8 -8 11 -2 q-4 4 -11 2'].map(d => ink(g, d, 1.5, { stroke: C.string }));
+      const bits = [0, 1].map(() => ink(g, '', 1.5, { stroke: C.string, opacity: 0 }));
+      t.parts = { wrapL, wrapR, fold, strings, bits }; t.tied = true;
+    } else if (kind === 'yumurta') fill(g, ell(0, 0, 9, 11.5), '#fbf6ea', 1.6);
+    else if (kind === 'mandalina') { fill(g, ell(0, 0, 13, 12), C.orange, 1.6); ink(g, 'M-6 -4 q2 -3 5 -3', 1.2, { stroke: '#fbd29a' }); fill(g, 'M0 -12 q4 -7 10 -5 q-3 6 -10 5Z', C.leaf, 1); }
+    else if (kind === 'salatalık') { fill(g, SHAPE['salatalık'], '#6f9d45', 1.6); ink(g, 'M-30 -2 l1 0 M-14 2 l1 0 M2 -3 l1 0 M18 1 l1 0 M32 -2 l1 0', 2, { stroke: '#d9e9bf' }); }
+    else {
+      const look = LOOK[topping ?? 'somon'];
+      fill(g, 'M-12 3 Q-13 -5 0 -6 Q13 -5 12 3Z', PAPER, 1.4);
+      fill(g, 'M-13 -3 Q-1 -12 13 -5 Q14 -2 11 -1 Q0 -6 -11 0Z', look.fill, 1.3);
+      if (look.band) fill(g, 'M-2 -9 L3 -9 L4 3 L-1 3Z', look.band, 1);
+      else ink(g, 'M-6 -5 q3 -2 6 -2 M2 -6 q3 -1 6 0', 1.2, { stroke: look.line });
+    }
+    list.push(t);
+    return t;
+  }
 
   // mist over the inside: a pale veil with a mask your finger wipes through
   const maskId = 'icebox-wipe';
@@ -133,16 +164,17 @@ export function createIcebox(card: HTMLElement, { onTake, onExit, onNote }: { on
   [[188], [430]].forEach(([y]) => fill(world, rect(40, y, 54, y + 16), C.brass, 1.6));
   const puffs = [0, 1, 2, 3].map(() => ink(world, '', 1.4, { stroke: '#9fb3b0', opacity: 0 }));
 
-  // the bamboo tray below, where the fish goes
+  // the bamboo tray below: where things leave from, or arrive to
   const tray = mk('g', { opacity: 0 }, world);
-  fill(tray, `M${TRAY[0] - 58} ${TRAY[1] - 8} Q${TRAY[0]} ${TRAY[1] + 16} ${TRAY[0] + 58} ${TRAY[1] - 8} L${TRAY[0] + 52} ${TRAY[1] - 14} Q${TRAY[0]} ${TRAY[1] + 6} ${TRAY[0] - 52} ${TRAY[1] - 14}Z`, C.bamboo, 1.8);
-  const weave: string[] = []; for (let x = -44; x <= 44; x += 11) weave.push(`M${TRAY[0] + x} ${TRAY[1] - 10 + Math.abs(x) * .1}l3 ${f(9 - Math.abs(x) * .1)}`);
+  fill(tray, `M${TRAY[0] - 66} ${TRAY[1] - 8} Q${TRAY[0]} ${TRAY[1] + 16} ${TRAY[0] + 66} ${TRAY[1] - 8} L${TRAY[0] + 60} ${TRAY[1] - 14} Q${TRAY[0]} ${TRAY[1] + 6} ${TRAY[0] - 60} ${TRAY[1] - 14}Z`, C.bamboo, 1.8);
+  const weave: string[] = []; for (let x = -52; x <= 52; x += 13) weave.push(`M${TRAY[0] + x} ${TRAY[1] - 10 + Math.abs(x) * .1}l3 ${f(9 - Math.abs(x) * .1)}`);
   ink(tray, weave.join(''), .8, { opacity: .6 });
-  const trayRing = mk('path', { d: ell(TRAY[0], TRAY[1] - 6, 46, 9), fill: 'none', stroke: '#c8423a', 'stroke-width': 1.4, 'stroke-dasharray': '4 5', opacity: 0 }, tray);
+  const trayRing = mk('path', { d: ell(TRAY[0], TRAY[1] - 6, 54, 10), fill: 'none', stroke: '#c8423a', 'stroke-width': 1.4, 'stroke-dasharray': '4 5', opacity: 0 }, tray);
+  const trayLabel = mk('text', { x: TRAY[0], y: TRAY[1] + 20, 'text-anchor': 'middle', 'font-size': 11, 'font-style': 'italic', 'font-family': '"Iowan Old Style", Georgia, serif', fill: INK }, tray);
+  const front = mk('g', {}, world);
 
-  // your stroke while cutting, and pieces of string falling away
+  // your stroke while cutting
   const slash = ink(world, '', 2.6, { opacity: 0 });
-  const bits = [0, 1].map(() => ink(world, '', 1.6, { stroke: '#8a5a3c', opacity: 0 }));
 
   // a ghost finger that shows the gesture once (and again if you seem stuck)
   const ghostG = mk('g', { opacity: 0, 'pointer-events': 'none' }, svg);
@@ -152,38 +184,55 @@ export function createIcebox(card: HTMLElement, { onTake, onExit, onNote }: { on
   const ghostRing = mk('circle', { r: 9, fill: 'none', stroke: '#c8423a', 'stroke-width': 1.6, opacity: 0 }, ghostG);
 
   // ------------------------------------------------------------------ state
-  type Phase = 'door' | 'wipe' | 'cut' | 'take' | 'done';
-  let open = false, op = 0, phase: Phase = 'door', phaseT = 0, idle = 0, now = 0;
+  type Phase = 'door' | 'wipe' | 'main' | 'done';
+  let open = false, op = 0, phase: Phase = 'door', phaseT = 0, idle = 0, mode: 'take' | 'store' = 'take', wipeToday = true;
   let doorOpen = 0, doorTarget = 0, dragging = false, finger: Vec | null = null, lastPt: Vec | null = null;
   let wipePath = '', covered = new Set<number>(), mistOp = 0;
-  let slashPts: Vec[] = [], slashOp = 0, cutT = -1;
-  let fishPos: Vec = [PKG.cx, PKG.cy], fishDrag: Vec | null = null, fishLift = 0, takenT = -1, closeT = -1;
+  let slashPts: Vec[] = [], slashOp = 0, drag: { t: Thing; off: Vec; from: { spot: number; tray: number } } | null = null;
+  let doneT = -1, closeT = -1, result: IceboxResult | null = null;
   let ghost: { pts: Vec[]; t: number; period: number } | null = null, ghostOp = 0, taught: Partial<Record<Phase, boolean>> = {};
-  const noted = new Set<IceboxMissing>();
+  const noted = new Set<Item>();
   const GRID = { cols: 9, rows: 12 };
+  const stepsOf = () => (['door', ...(wipeToday ? ['wipe'] : []), 'main'] as Phase[]);
 
-  const TITLES: Record<Phase, string> = { door: 'Kapağı aç', wipe: 'Buğuyu sil', cut: 'İpi kes', take: 'Tepsiye indir', done: '' };
-  const TIPS: Record<Phase, string> = {
-    door: 'Pirinç kolu tut, kapağı sola doğru çek.',
-    wipe: 'İçerisi buğulanmış. Parmağınla sil.',
-    cut: 'Somon üst rafta. İpini tek bir çizgiyle kes.',
-    take: 'Somonu aşağıdaki tepsiye indir.',
-    done: '',
-  };
+  const onTray = () => list.filter(t => t.tray >= 0).sort((a, b) => a.tray - b.tray);
+  const spotFree = (kind: Kind, i: number) => !list.some(t => t.kind === kind && t.spot === i && t !== drag?.t);
+  const target = (t: Thing): Vec => t.tray >= 0 ? trayPos(t.tray, onTray().length) : t.spot >= 0 ? SPOTS[t.kind][t.spot] : t.pos;
+  function trayPos(i: number, n: number): Vec { const gap = n > 3 ? 30 : 36; return [TRAY[0] + (i - (n - 1) / 2) * gap, TRAY[1] - 12]; }
+  function relayTray() { onTray().forEach((t, i) => (t.tray = i)); }
+  const tied = () => list.find(t => t.tied && t.spot >= 0);
+
+  const TITLES = (p: Phase) => p === 'door' ? 'Kapağı aç' : p === 'wipe' ? 'Buğuyu sil' : mode === 'store' ? 'Dolaba diz' : 'Tepsiye indir';
+  function tipFor(p: Phase) {
+    if (p === 'door') return 'Pirinç kolu tut, kapağı sola doğru çek.';
+    if (p === 'wipe') return 'İçerisi buğulanmış. Parmağınla sil.';
+    if (mode === 'store') return 'Tepsidekileri raftaki kesik çizgili yerlerine sürükle.';
+    const salmon = tied();
+    return salmon ? 'Pişireceğini ya da hazır bir yemeği tepsiye indir. Somonun ipini önce tek çizgiyle kes.' : 'Pişireceğini ya da hazır bir yemeği tepsiye indir.';
+  }
   function setPhase(p: Phase) {
     phase = p; phaseT = 0; idle = 0; ghost = null;
     // a finger still down from the last step starts nothing in this one; lift and touch again
-    dragging = false; lastPt = null; fishDrag = null; slashPts = [];
-    const n = ['door', 'wipe', 'cut', 'take'].indexOf(p);
-    title.innerHTML = n >= 0 ? `<span>${n + 1} / 4</span> ${TITLES[p]}` : '';
+    dragging = false; lastPt = null; drag = null; slashPts = [];
+    const steps = stepsOf(), n = steps.indexOf(p);
+    title.innerHTML = n >= 0 ? `<span>${n + 1} / ${steps.length}</span> ${TITLES(p)}` : '';
     title.classList.remove('show'); void title.offsetWidth; if (n >= 0) title.classList.add('show');
     tip.classList.remove('show');
   }
   function teach() {
     if (phase === 'door') ghost = { pts: [[HANDLE[0], HANDLE[1]], [HANDLE[0] - 70, HANDLE[1] + 6], [HANDLE[0] - 150, HANDLE[1] + 4]], t: 0, period: 2.4 };
     if (phase === 'wipe') ghost = { pts: Array.from({ length: 9 }, (_, i) => [90 + (i % 2) * 140, 200 + i * 30] as Vec), t: 0, period: 3 };
-    if (phase === 'cut') ghost = { pts: [[PKG.cx - 30, PKG.cy - 42], [PKG.cx + 34, PKG.cy + 40]], t: 0, period: 1.9 };
-    if (phase === 'take') ghost = { pts: [[fishPos[0], fishPos[1]], [TRAY[0], TRAY[1] - 10]], t: 0, period: 2.4 };
+    if (phase !== 'main') return;
+    if (mode === 'store') {
+      const t = onTray()[0]; if (!t) return;
+      const i = SPOTS[t.kind].findIndex((_, k) => spotFree(t.kind, k)); if (i < 0) return;
+      ghost = { pts: [[...t.pos], [...SPOTS[t.kind][i]]], t: 0, period: 2.4 };
+    } else {
+      const salmon = tied();
+      const first = list.find(t => t.spot >= 0 && !t.tied && (t.kind === 'dish' || recipeFor(t.kind as Item)));
+      if (salmon && (!first || first.kind !== 'yumurta')) ghost = { pts: [[salmon.pos[0] - 26, salmon.pos[1] - 36], [salmon.pos[0] + 28, salmon.pos[1] + 34]], t: 0, period: 1.9 };
+      else if (first) ghost = { pts: [[...first.pos], [TRAY[0], TRAY[1] - 12]], t: 0, period: 2.4 };
+    }
   }
   const local = (e: PointerEvent): Vec => {
     const m = svg.getScreenCTM(); const p = svg.createSVGPoint(); p.x = e.clientX; p.y = e.clientY;
@@ -206,65 +255,130 @@ export function createIcebox(card: HTMLElement, { onTake, onExit, onNote }: { on
       }
     }
   }
+  const hitThing = (p: Vec) => [...list].reverse().find(t => {
+    const s = t.kind === 'somon' ? [34, 18] : t.kind === 'salatalık' ? [46, 10] : [16, 15];
+    return Math.abs(p[0] - t.pos[0]) < s[0] && Math.abs(p[1] - t.pos[1]) < s[1];
+  });
+  const canMove = (t: Thing) => mode === 'store' ? t.isNew : !t.isNew;
+
+  // what the tray holds, and whether it is a whole recipe (or a plate of dishes)
+  function trayState() {
+    const items = onTray();
+    if (!items.length) return { group: '' as '' | 'dish' | Topping, done: false, label: '' };
+    if (items[0].kind === 'dish') {
+      const left = list.some(t => t.kind === 'dish' && t.spot >= 0);
+      return { group: 'dish' as const, done: items.length >= PIECES || !left, label: `${items.length} parça` };
+    }
+    const r = recipeFor(items[0].kind as Item)!;
+    const [[need, n]] = Object.entries(r.needs) as [Item, number][];
+    return { group: r.id, done: items.length >= n, label: `${r.name} · ${items.length}/${n} ${ITEMS[need].name.toLowerCase()}` };
+  }
+  function accepts(t: Thing) {
+    const s = trayState();
+    if (t.kind === 'dish') return !s.group || s.group === 'dish' ? true : 'Tepside pişirilecek bir şey var.';
+    const r = recipeFor(t.kind as Item);
+    if (!r) return `${ITEMS[t.kind as Item].name} tatlılık; yemeğe gerekmez.`;
+    if (!s.group) return true;
+    if (s.group !== r.id) return 'Tepside başka bir şey var.';
+    return !s.done || 'Bu kadarı yeter.';
+  }
 
   svg.addEventListener('pointerdown', (e) => {
     if (!open || phase === 'done' || dragging) return;
     e.preventDefault(); svg.setPointerCapture(e.pointerId);
     const p = local(e); finger = p; lastPt = null; dragging = true; idle = 0; ghost = null;
-    // a dashed outline: what is missing
-    const g = (e.target as Element).closest?.('[data-missing]');
-    if (g && phase !== 'door' && mistOp < .5) {
-      const m = ghosts.find(x => x.id === g.getAttribute('data-missing'))!;
-      m.t = 0; noted.add(m.id); sfx.paper(); haptic(5); dragging = false; return;
+    if (phase === 'wipe') { wipeAt(p); lastPt = p; return; }
+    if (phase === 'door') { if (Math.hypot(p[0] - HANDLE[0], p[1] - HANDLE[1]) > 60 && !(p[0] > 120 && p[1] > 160 && p[1] < 474)) dragging = false; return; }
+    // an empty place of something you have none of: a note for the market
+    const place = (e.target as Element).closest?.('[data-place]');
+    const t = hitThing(p);
+    if (!t && place) {
+      const kind = place.getAttribute('data-place') as Kind, i = +place.getAttribute('data-place-i')!;
+      if (kind !== 'dish' && !list.some(x => x.kind === kind)) { noted.add(kind); note(SPOTS[kind][i], `${ITEMS[kind].name} bitmiş`); sfx.paper(); haptic(5); }
+      else if (kind === 'dish') note(SPOTS.dish[i], 'Pişirdiklerin burada durur');
+      dragging = false; return;
     }
-    if (phase === 'wipe') { wipeAt(p); lastPt = p; }
-    if (phase === 'cut') { slashPts = [p]; slashOp = 1; }
-    if (phase === 'take' && Math.abs(p[0] - fishPos[0]) < 46 && Math.abs(p[1] - fishPos[1]) < 30) { fishDrag = [fishPos[0] - p[0], fishPos[1] - p[1]]; sfx.tap(); haptic(6); }
-    if (phase === 'door' && Math.hypot(p[0] - HANDLE[0], p[1] - HANDLE[1]) > 60 && !(p[0] > 120 && p[1] > 160 && p[1] < 474)) dragging = false;
+    if (t && !t.tied && canMove(t)) { drag = { t, off: [t.pos[0] - p[0], t.pos[1] - p[1]], from: { spot: t.spot, tray: t.tray } }; t.spot = -1; t.tray = -1; relayTray(); sfx.tap(); haptic(6); return; }
+    if (t && !canMove(t) && mode === 'store') { note(t.pos, 'Önce tepsidekileri yerleştir'); dragging = false; return; }
+    // anything else starts a stroke: across a tied parcel, it cuts the string
+    slashPts = [p]; slashOp = 1;
   });
   svg.addEventListener('pointermove', (e) => {
     if (!dragging || !open) return;
     const p = local(e);
     if (phase === 'door') doorOpen = doorTarget = clamp01((HANDLE[0] - p[0]) / 190);
     if (phase === 'wipe') { wipeAt(p); lastPt = p; if (Math.random() < .25) sfx.stir(2); }
-    if (phase === 'cut' && finger) {
-      slashPts.push(p);
-      const a = slashPts[slashPts.length - 2] ?? p;
-      const o = (q: Vec): Vec => [fishPos[0] + q[0], fishPos[1] + q[1]];
-      // the string runs across and down the parcel: any stroke through it cuts it
-      if (cutT < 0 && (crosses(a, p, o([-39, 1]), o([39, 1])) || crosses(a, p, o([0, -17]), o([0, 17])))) {
-        cutT = 0; sfx.slice(); haptic(14);
+    if (phase === 'main') {
+      if (drag) drag.t.pos = [p[0] + drag.off[0], p[1] + drag.off[1]];
+      else if (slashPts.length) {
+        const a = slashPts[slashPts.length - 1] ?? p; slashPts.push(p);
+        for (const t of list) if (t.tied && t.spot >= 0 && t.cutT < 0) {
+          const o = (q: Vec): Vec => [t.pos[0] + q[0], t.pos[1] + q[1]];
+          if (crosses(a, p, o([-32, 1]), o([32, 1])) || crosses(a, p, o([0, -15]), o([0, 15]))) { t.cutT = 0; t.tied = false; sfx.slice(); haptic(14); }
+        }
       }
     }
-    if (phase === 'take' && fishDrag) fishPos = [p[0] + fishDrag[0], p[1] + fishDrag[1]];
     finger = p;
   });
   const up = () => {
     if (!dragging) return;
-    dragging = false; lastPt = null;
+    dragging = false; lastPt = null; slashPts = [];
     if (phase === 'door') { if (doorOpen > .38) { doorTarget = 1; sfx.paper(); haptic(10); } else doorTarget = 0; }
-    if (phase === 'take' && fishDrag) {
-      fishDrag = null;
-      if (Math.hypot(fishPos[0] - TRAY[0], fishPos[1] - (TRAY[1] - 10)) < 60) { takenT = 0; sfx.press(); haptic(12); }
-      else sfx.nope();
+    if (phase === 'main' && drag) {
+      const { t, from } = drag; drag = null;
+      const nearTray = Math.hypot(t.pos[0] - TRAY[0], t.pos[1] - (TRAY[1] - 10)) < 70;
+      let spot = -1, best = 36;
+      SPOTS[t.kind].forEach((at, i) => { const d = Math.hypot(at[0] - t.pos[0], at[1] - t.pos[1]); if (d < best && spotFree(t.kind, i)) { best = d; spot = i; } });
+      // a free place of its own kind wins (the dish shelf sits just above the tray)
+      if (spot >= 0) { t.spot = spot; sfx.press(); haptic(8); }
+      else if (nearTray && mode === 'take') {
+        const ok = accepts(t);
+        if (ok === true) { t.tray = onTray().length; sfx.press(); haptic(9); }
+        else { note(t.pos, ok); sfx.nope(); t.spot = from.spot; t.tray = from.tray; }
+      } else if (nearTray && mode === 'store') { t.tray = onTray().length; }
+      else { if (mode === 'store' && from.spot < 0 && t.tray < 0) t.tray = onTray().length; else { t.spot = from.spot; t.tray = from.tray; } sfx.nope(); }
+      relayTray();
+      checkDone();
     }
   };
+  function checkDone() {
+    if (doneT >= 0) return;
+    if (mode === 'store' && !onTray().length) { result = { mode: 'store' }; doneT = 0; sfx.success(); haptic(14); }
+    if (mode === 'take') {
+      const s = trayState();
+      if (!s.done) return;
+      const items = onTray();
+      result = s.group === 'dish' ? { mode: 'take', serve: items.map(t => t.topping!) } : { mode: 'take', cook: s.group as Topping, used: items.map(t => t.kind as Item) };
+      doneT = 0; sfx.success(); haptic(14);
+    }
+  }
   svg.addEventListener('pointerup', up); svg.addEventListener('pointercancel', up);
   back.addEventListener('click', () => { if (open) api.close(); });
 
   const api = {
     get isOpen() { return open; },
     get phase() { return phase; },
+    get mode() { return mode; },
     get noted() { return [...noted]; },
     /** for headless checks: a sheet point in client pixels */
     _client(p: Vec): Vec { const m = svg.getScreenCTM()!; const q = svg.createSVGPoint(); q.x = p[0]; q.y = p[1]; const r = q.matrixTransform(m); return [r.x, r.y]; },
-    _pts: { HANDLE, PKG, TRAY, IN, MISSING: MISSING.map(m => m.at) },
-    get _fish() { return fishPos; },
-    open() {
-      open = true; op = 0; doorOpen = doorTarget = 0; dragging = false; wipePath = ''; wipes.setAttribute('d', ''); covered = new Set(); mistOp = 0;
-      cutT = -1; slashOp = 0; fishPos = [PKG.cx, PKG.cy]; fishDrag = null; takenT = closeT = -1; taught = {};
-      [wrapL, wrapR, wrapFold, bow, ...stringH, ...stringV].forEach(n => { n.setAttribute('transform', ''); n.setAttribute('opacity', n === wrapFold ? '.55' : '1'); });
-      ghosts.forEach(g => { g.t = -1; });
+    _pts: { HANDLE, TRAY, IN, SPOTS },
+    /** where each thing is (headless checks drag them) */
+    get _things() { return list.map(t => ({ kind: t.kind, topping: t.topping, pos: t.pos, spot: t.spot, tray: t.tray, tied: t.tied, isNew: t.isNew })); },
+    open(o: IceboxOpen) {
+      open = true; op = 0; mode = o.mode; wipeToday = o.wipe;
+      doorOpen = doorTarget = 0; dragging = false; drag = null; wipePath = ''; wipes.setAttribute('d', ''); covered = new Set(); mistOp = 0;
+      slashOp = 0; doneT = closeT = -1; result = null; taught = {}; noteT = -1;
+      list.forEach(t => t.g.remove()); list = [];
+      // what is already inside, in its places
+      for (const id of ITEM_IDS) for (let i = 0; i < o.pantry[id]; i++) { const t = drawThing(id); t.spot = i; t.pos = [...SPOTS[id][i]]; }
+      o.dishes.forEach((top, i) => { const t = drawThing('dish', top); t.spot = i; t.pos = [...SPOTS.dish[i]]; });
+      // what you brought, laid out on the tray
+      const carry: Thing[] = [];
+      (o.carrying?.items ?? []).forEach(id => carry.push(drawThing(id)));
+      (o.carrying?.pieces ?? []).forEach(top => carry.push(drawThing('dish', top)));
+      carry.forEach((t, i) => { t.isNew = true; t.tray = i; t.pos = trayPos(i, carry.length); if (t.kind === 'somon') t.tied = true; });
+      // a dish shelf holds two plates' worth; never more than there is room for
       svg.style.display = 'block'; svg.classList.add('show');
       [back, title, tip].forEach(n => (n.style.display = 'block')); back.classList.add('show');
       setPhase('door');
@@ -272,86 +386,90 @@ export function createIcebox(card: HTMLElement, { onTake, onExit, onNote }: { on
     close(done = false) {
       open = false; dragging = false; svg.classList.remove('show'); svg.style.display = 'none'; svg.style.opacity = '0';
       [back, title, tip].forEach(n => { n.classList.remove('show'); n.style.display = 'none'; });
-      if (noted.size) onNote([...noted]);
-      if (done) onTake(); else onExit();
+      if (noted.size) { onNote([...noted]); noted.clear(); }
+      if (done && result) onDone(result); else onExit();
     },
     draw(t: number, dt: number) {
-      now = t; void now;
       if (!open) return;
       op = approach(op, closeT >= 0 ? 0 : 1, 7, dt);
       svg.style.opacity = f(easeOut(op));
       phaseT += dt; idle += dt;
-      if (!taught[phase] && phaseT > .7 && phase !== 'done') { taught[phase] = true; teach(); tip.textContent = TIPS[phase]; tip.classList.add('show'); }
+      if (!taught[phase] && phaseT > .7 && phase !== 'done') { taught[phase] = true; teach(); tip.textContent = tipFor(phase); tip.classList.add('show'); }
       if (taught[phase] && !ghost && !dragging && idle > 6 && phase !== 'done') { teach(); idle = 0; }
 
       // the ice sweats: a drip now and then
       drips.forEach((d, i) => { const u = (t * .35 + i * .33) % 1, x = 92 + i * 64; d.setAttribute('cx', f(x)); d.setAttribute('cy', f(148 + u * 14)); d.setAttribute('opacity', f(u < .85 ? .8 : 0)); });
 
-      // 1 · the door swings on its hinge (past flat, showing its edge)
+      // the door swings on its hinge (past flat, showing its edge)
       if (!dragging || phase !== 'door') doorOpen = approach(doorOpen, doorTarget, doorTarget > doorOpen ? 6 : 9, dt);
       const s = 1 - easeInOut(doorOpen) * 1.16;
       door.setAttribute('transform', `translate(${HINGE} 0) scale(${f(s)} 1) translate(${-HINGE} 0)`);
       doorFace.setAttribute('fill', s < 0 ? C.woodDark : C.woodLight);
       doorPanel.setAttribute('opacity', s < 0 ? '0' : '.6');
-      if (phase === 'door' && doorOpen > .97 && doorTarget === 1) { mistOp = 1; setPhase('wipe'); }
-      // a breath of cold air when it opens
+      if (phase === 'door' && doorOpen > .97 && doorTarget === 1) { if (wipeToday) { mistOp = 1; setPhase('wipe'); } else setPhase('main'); }
       puffs.forEach((p, i) => {
         const age = phase === 'door' ? 0 : clamp01((phaseT - i * .15) / 1.6);
         const x = 90 + i * 46, y = 240 - age * 90;
         p.setAttribute('d', `M${f(x)} ${f(y)} q10 -10 0 -20 q-8 -8 2 -18`);
-        p.setAttribute('opacity', f(phase === 'wipe' && age < 1 ? (1 - age) * .55 : 0));
+        p.setAttribute('opacity', f(phase !== 'door' && phase !== 'done' && age < 1 && phaseT < 2 ? (1 - age) * .55 : 0));
       });
 
-      // 2 · mist, wiped away
+      // mist, wiped away
       mist.setAttribute('opacity', f(mistOp));
-      if (phase === 'wipe' && covered.size > GRID.cols * GRID.rows * .5) { sfx.chime(); haptic(10); setPhase('cut'); }
+      if (phase === 'wipe' && covered.size > GRID.cols * GRID.rows * .5) { sfx.chime(); haptic(10); setPhase('main'); }
       if (phase !== 'wipe' && phase !== 'door') mistOp = approach(mistOp, 0, 3, dt);
 
-      // missing things: a little note above the outline
-      ghosts.forEach((g) => {
-        if (g.t >= 0) g.t += dt;
-        const shown = g.t >= 0 && g.t < 2.6;
-        g.note.setAttribute('opacity', f(shown ? Math.min(1, g.t * 5) * (1 - clamp01((g.t - 2.2) / .4)) : 0));
-        g.note.setAttribute('transform', `translate(0 ${f(shown ? (1 - backOut(clamp01(g.t / .35))) * 6 : 0)})`);
+      // outlines: an empty place breathes a little; a filled one hides under its thing
+      places.forEach(pl => {
+        const filled = list.some(x => x.kind === pl.kind && x.spot === pl.i && x !== drag?.t);
+        const wanted = drag && drag.t.kind === pl.kind;
+        pl.n.setAttribute('opacity', f(filled ? 0 : wanted ? .75 + Math.sin(t * 5) * .2 : .42 + Math.sin(t * 2 + pl.i) * .08));
+        pl.n.setAttribute('stroke', wanted ? '#c8423a' : INK);
       });
+      if (noteT >= 0) { noteT += dt; if (noteT > 2.4) noteT = -1; }
+      noteG.setAttribute('opacity', f(noteT >= 0 ? Math.min(1, noteT * 5) * (1 - clamp01((noteT - 2) / .4)) : 0));
+      noteG.setAttribute('transform', `translate(${f(noteAt[0])} ${f(noteAt[1] + (noteT >= 0 ? (1 - backOut(clamp01(noteT / .35))) * 6 : 0))})`);
 
-      // 3 · your stroke, and the string giving way
-      slashOp = approach(slashOp, dragging && phase === 'cut' ? 1 : 0, 4, dt);
-      slash.setAttribute('d', slashPts.length > 1 ? 'M' + slashPts.map(pt).join('L') : '');
+      // your stroke
+      slashOp = approach(slashOp, dragging && !drag && phase === 'main' ? 1 : 0, 4, dt);
+      slash.setAttribute('d', slashPts.length > 1 ? 'M' + slashPts.map(pt).join('L') : slash.getAttribute('d') ?? '');
       slash.setAttribute('opacity', f(slashOp * .85));
-      if (cutT >= 0) {
-        cutT += dt;
-        const u = easeOut(clamp01(cutT / .5)), w = easeInOut(clamp01((cutT - .25) / .6));
-        [stringH[0], stringV[0], bow].forEach(n => n.setAttribute('opacity', f(1 - u)));
-        [stringH[1], stringV[1]].forEach(n => n.setAttribute('opacity', f(1 - u)));
-        bits.forEach((b, i) => {
-          const fall = cutT * cutT * 160, x = fishPos[0] + (i ? 14 : -18), y = fishPos[1] + fall;
-          b.setAttribute('d', `M${f(x)} ${f(y)} q${i ? 8 : -8} 4 ${i ? 4 : -4} 12`);
-          b.setAttribute('opacity', f(cutT < .9 ? 1 - cutT / .9 : 0));
-        });
-        // the paper falls open to both sides
-        wrapL.setAttribute('transform', `translate(${f(-w * 16)} ${f(w * 3)}) rotate(${f(-w * 12)} -39 17) scale(${f(1 - w * .55)} 1)`);
-        wrapR.setAttribute('transform', `translate(${f(w * 16)} ${f(w * 3)}) rotate(${f(w * 12)} 39 17) scale(${f(1 - w * .55)} 1)`);
-        wrapFold.setAttribute('opacity', f(.55 * (1 - w)));
-        if (phase === 'cut' && cutT > .9) { sfx.success(); setPhase('take'); }
-      }
 
-      // 4 · lower the fish onto the tray
-      tray.setAttribute('opacity', f(phase === 'take' || phase === 'done' ? Math.min(1, phaseT * 3) : 0));
-      trayRing.setAttribute('opacity', f(phase === 'take' && takenT < 0 ? .45 + Math.sin(t * 3) * .2 : 0));
-      fishLift = approach(fishLift, fishDrag ? 1 : 0, 12, dt);
-      if (phase === 'take' && !fishDrag && takenT < 0) fishPos = [approach(fishPos[0], PKG.cx, 9, dt), approach(fishPos[1], PKG.cy, 9, dt)];
-      if (takenT >= 0) {
-        takenT += dt;
-        fishPos = [approach(fishPos[0], TRAY[0], 12, dt), approach(fishPos[1], TRAY[1] - 12, 12, dt)];
-        if (phase === 'take') setPhase('done');
-        if (takenT > .5) doorTarget = 0, doorOpen = approach(doorOpen, 0, 5, dt);
-        if (takenT > 1.1 && closeT < 0) closeT = 0;
+      // things settle where they belong; a parcel whose string was cut falls open
+      for (const th of list) {
+        if (th !== drag?.t) { const g = target(th); th.pos = [approach(th.pos[0], g[0], 12, dt), approach(th.pos[1], g[1], 12, dt)]; }
+        th.lift = approach(th.lift, th === drag?.t ? 1 : 0, 12, dt);
+        th.g.setAttribute('transform', `translate(${f(th.pos[0])} ${f(th.pos[1] - th.lift * 6)}) rotate(${f(th.lift * -3)}) scale(${f(1 + th.lift * .07)})`);
+        if (th.parts && th.cutT >= 0) {
+          th.cutT += dt;
+          const u = easeOut(clamp01(th.cutT / .5)), w = easeInOut(clamp01((th.cutT - .25) / .6));
+          th.parts.strings.forEach(n => n.setAttribute('opacity', f(1 - u)));
+          th.parts.bits.forEach((b, i) => { const fall = th.cutT * th.cutT * 160; b.setAttribute('d', `M${i ? 12 : -16} ${f(fall)} q${i ? 8 : -8} 4 ${i ? 4 : -4} 12`); b.setAttribute('opacity', f(th.cutT < .9 ? 1 - th.cutT / .9 : 0)); });
+          th.parts.wrapL.setAttribute('transform', `translate(${f(-w * 12)} ${f(w * 2)}) rotate(${f(-w * 12)} -32 15) scale(${f(1 - w * .6)} 1)`);
+          th.parts.wrapR.setAttribute('transform', `translate(${f(w * 12)} ${f(w * 2)}) rotate(${f(w * 12)} 32 15) scale(${f(1 - w * .6)} 1)`);
+          th.parts.fold.setAttribute('opacity', f(.55 * (1 - w)));
+        } else if (th.parts) {
+          th.parts.strings.forEach(n => n.setAttribute('opacity', th.tied ? '1' : '0'));
+          [th.parts.wrapL, th.parts.wrapR].forEach(n => n.setAttribute('transform', ''));
+          th.parts.fold.setAttribute('opacity', '.55'); th.parts.bits.forEach(b => b.setAttribute('opacity', '0'));
+        }
       }
-      // the fish leaves the shelf: it is drawn over the door from now on
-      if ((phase === 'take' || phase === 'done') && fish.parentNode !== world) world.insertBefore(fish, slash);
-      if (phase !== 'take' && phase !== 'done' && fish.parentNode !== contents) contents.appendChild(fish);
-      fish.setAttribute('transform', `translate(${f(fishPos[0])} ${f(fishPos[1] - fishLift * 6)}) rotate(${f(fishLift * -3)}) scale(${f(1 + fishLift * .06)})`);
+      for (const th of list) { const want = th === drag?.t || th.tray >= 0 || (th.isNew && th.spot < 0) ? front : things; if (th.g.parentNode !== want) want.appendChild(th.g); }
+      // the one you hold is drawn on top
+      if (drag && front.lastChild !== drag.t.g) front.appendChild(drag.t.g);
+
+      // the tray
+      const ts = trayState();
+      tray.setAttribute('opacity', f(phase === 'main' || phase === 'done' ? Math.min(1, phaseT * 3 + (doneT >= 0 ? 1 : 0)) : mode === 'store' ? .9 : 0));
+      trayRing.setAttribute('opacity', f(phase === 'main' && mode === 'take' && !ts.done ? .45 + Math.sin(t * 3) * .2 : 0));
+      trayLabel.textContent = mode === 'take' && phase === 'main' ? ts.label : '';
+      // done: the door swings shut, the view fades back to the kitchen
+      if (doneT >= 0) {
+        doneT += dt;
+        if (phase !== 'done') setPhase('done');
+        if (doneT > .5) doorTarget = 0;
+        if (doneT > 1.2 && closeT < 0) closeT = 0;
+      }
       if (closeT >= 0) { closeT += dt; if (closeT > .55) { api.close(true); return; } }
 
       // the ghost finger
