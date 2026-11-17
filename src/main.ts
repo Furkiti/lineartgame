@@ -223,7 +223,8 @@ function act() {
   const r = home.act(player);
   if(home.mealActive)ui?.hint(()=>[player.x,player.y-54],null);
   if (r === 'exit') go(exit);
-  else if ((r === 'cook' || r === 'sleep') && story) story.onHome(r);
+  else if ((r === 'cook' || r === 'sleep' || r === 'icebox') && story) story.onHome(r);
+  else if (r === 'icebox') home.fromIcebox();
 }
 actN.addEventListener('click', act);
 addEventListener('keydown', (e) => { if (e.defaultPrevented) return; if (e.key === 'Enter' || e.key.toLowerCase() === 'e') { e.preventDefault(); act(); } });

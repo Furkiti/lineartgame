@@ -378,6 +378,8 @@ export function buildHome(svg: SVGSVGElement) {
     doorTarget: 0, doorContact: false, walkExit: false,
     get doorOpen() { return doorOpen; },
     onEnter() { doorOpen = 0; api.doorTarget = 0; api.exitIntent = false; },
+    /** the fish came out of the icebox close-up: it rises into your hands and the door shuts */
+    fromIcebox() { if (prep === 0) iceT = 0.8; },
     takePlate() { if (step === 4) { step = 5; top.appendChild(dish); } },
     bounds: { x0: IX + 14, x1: IX + IW - 14 },
     view: { x0: IX - 14, x1: IX + IW + 14 },
@@ -430,13 +432,13 @@ export function buildHome(svg: SVGSVGElement) {
       return null;
     },
     /** Do it. Returns 'exit' when the figure should go back out to the street. */
-    act(pl: Player): 'exit' | 'cook' | 'sleep' | null {
+    act(pl: Player): 'exit' | 'cook' | 'sleep' | 'icebox' | null {
       const label = api.prompt(pl);
       if (!label) return null;
       const w = where(pl);
       if (w === 'door') return 'exit';
       if (w === 'peg') { bagT = 0; bagDir = pl.carryBundle ? 'hang' : 'take'; pl.carryBundle = false; return null; }
-      if (w === 'icebox') { iceT = 0; return null; }
+      if (w === 'icebox') return 'icebox';
       if (w === 'cook' && prep === 1) { placeT = 0; fishFrom = [pl.hands[0] - IX, pl.hands[1]]; return null; }
       if (w === 'cook' && step < 4) return 'cook';
       if (w === 'futon') return 'sleep';

@@ -16,6 +16,7 @@ import { createKenta, createStuckKite, createKite, createStroke, recognise, type
 import { createFox } from './fox.ts';
 import { createCloseup } from './closeup.ts';
 import { createShodo, CHA, brush, compare } from './shodo.ts';
+import { createIcebox } from './icebox.ts';
 import { createNotebook, SKETCH, type Entry } from './notebook.ts';
 import { createPaper, fitLine, fitDrawing, linePath } from './paper.ts';
 import { nextVisit, timeRate, type Visit } from './schedule.ts';
@@ -27,7 +28,7 @@ import { DAYS, nextChapter, dayComplete, eveningTarget } from './journey.ts';
 import { sfx, haptic, wakeAudio, inkRing, approach, clamp01, easeOut, backOut } from './fx.ts';
 
 type Home = {
-  root: SVGGElement; surfaces: SVGGElement; beginSleep(): void; guestSeat: number; diningGuest: { x: number; y: number; hand: Vec; head: Vec } | null; guestReach: Vec | null; offeredLast: boolean; newDay(): void; canEat: boolean; canCook: boolean; busy: boolean; made: number; setPlateDesign(pattern: 'row' | 'triangle', garnish?: boolean): void; takePlate(): void; windowOpen: boolean; decorateTable(paths: string[]): void;
+  root: SVGGElement; surfaces: SVGGElement; beginSleep(): void; guestSeat: number; diningGuest: { x: number; y: number; hand: Vec; head: Vec } | null; guestReach: Vec | null; offeredLast: boolean; newDay(): void; canEat: boolean; canCook: boolean; busy: boolean; made: number; setPlateDesign(pattern: 'row' | 'triangle', garnish?: boolean): void; takePlate(): void; fromIcebox(): void; windowOpen: boolean; decorateTable(paths: string[]): void;
   actors: SVGGElement; step: number; eaten: number; canSleep: boolean; prep: number; bagHung: boolean; catHome: boolean;
   setStep(n: number): void; prompt(pl: unknown): string | null;
 };
@@ -193,7 +194,7 @@ export function createStory(o: {
   const q = {
     kite: 'sad' as 'sad' | 'talked' | 'done', dinner: '' as '' | 'kenta' | 'alone', sushi: false, fox: false,
     lantern: false, toy: false, toyKind: 0, catHome: false, letter: false, fair: false, order: false, fresh: new Set<string>(), day: 1, slept: 0,
-    name: '', created: false, walkLearned: false, guideMet: false, met: false, homeSeen: false, homeShown: false, visitedHome: false, kentaAway: false, nightHint: false, windowMoment: false, tableDecor: false,
+    name: '', shopping: [] as string[], created: false, walkLearned: false, guideMet: false, met: false, homeSeen: false, homeShown: false, visitedHome: false, kentaAway: false, nightHint: false, windowMoment: false, tableDecor: false,
     visit: 'none' as Visit, invitedDay: 0, missedNote: false, reminded: false,
     day2Seen: false, day3Seen: false, souvenir: '' as '' | 'cushion' | 'water', coins: 0,
     project: '' as '' | 'tea' | 'paws' | 'lanterns', projectPlan: '' as '' | 'tea' | 'paws', projectDay: 0, gathering: false, keepsake: false, tookMemento: false,
@@ -207,6 +208,7 @@ export function createStory(o: {
   };
   if (o.saved) { const { fresh, ...state } = o.saved.story; Object.assign(q, state); q.fresh = new Set(Array.isArray(fresh) ? fresh : []); }
   if (!Array.isArray(q.events)) q.events = [];
+  if (!Array.isArray(q.shopping)) q.shopping = [];
   if (!Array.isArray(q.shelterParts)) q.shelterParts = [];
   if (!Array.isArray(q.servedParts)) q.servedParts = [];
   if (o.saved && o.saved.story.arcVersion !== 5) {
@@ -331,6 +333,19 @@ export function createStory(o: {
   });
 
   closeup.restore(o.saved?.art.cooking);
+  // the icebox, up close: open, wipe, cut the string, lower the fish
+  let iceNote: string[] = [];
+  const icebox = createIcebox(card, {
+    onTake: () => { home.fromIcebox(); mode = 'walk'; cam = null; afterIcebox(); },
+    onExit: () => { mode = 'walk'; cam = null; afterIcebox(); },
+    onNote: (m) => { iceNote = m.filter(x => !q.shopping.includes(x)); q.shopping = [...new Set([...q.shopping, ...m])]; },
+  });
+  function afterIcebox() {
+    if (!iceNote.length) return;
+    const names = iceNote.map(x => x === 'salatalık' ? 'Salatalık' : 'Mandalina');
+    iceNote = [];
+    think(`${names.join(' ile ')} bitmiş. Bir ara pazara uğrarım.`);
+  }
   // ------------------------------------------------------------------ state & a tiny script runner
   let mode: 'intro' | 'walk' | 'cine' | 'brush' | 'cook' | 'sleep' | 'desk' | 'craft' = q.created ? 'walk' : 'intro';
   const syncControls = () => card.classList.toggle('controls-locked', mode !== 'walk');
@@ -679,6 +694,15 @@ export function createStory(o: {
     env.tip('Panayır sokağın batı ucunda. İstediğin zaman gidebilirsin.');
     yield 1;
     mode = 'walk'; cam = null;
+  }
+
+  function* iceboxIn(): Scene {
+    mode = 'cook'; obj = null; ui.guide(null); env.tip(null);
+    player.faceTo = -Math.PI / 2;
+    cam = fit(IX + 330, 270, IX + 380, 350, 4);
+    yield .6;
+    icebox.open();
+    player.faceTo = null;
   }
 
   function* cookIn(): Scene {
@@ -1163,7 +1187,7 @@ export function createStory(o: {
       setTimeout(() => env.banner('Yaz Panayırı', 'Fenerler, davul, takoyaki kokusu…'), 900);
     },
     /** the home asks the story to take over */
-    onHome(what: 'cook' | 'sleep') { if (what === 'cook') run(cookIn()); else run(sleep()); },
+    onHome(what: 'cook' | 'sleep' | 'icebox') { if (what === 'cook') run(cookIn()); else if (what === 'icebox') run(iceboxIn()); else run(sleep()); },
     onMemory(id:string){mark(id);},
     get canVisitFair() { return q.day >= 6 || q.gathering; },
     sortables(): { g: SVGGElement; y: number }[] { return ctx && !ctx.inside && !ctx.fair ? [kenta, hana, fox, ...neighbors].filter((c) => c.g.style.display !== 'none') : []; },
@@ -1171,10 +1195,10 @@ export function createStory(o: {
     update(c: Ctx) {
       ctx = c;
       const { t, dt, P, wind } = c;
-      card.classList.toggle('modal-open', paper.isOpen || notebook.isOpen || mode === 'desk' || mode === 'craft' || closeup.isOpen || !!env.localModal?.());
+      card.classList.toggle('modal-open', paper.isOpen || notebook.isOpen || mode === 'desk' || mode === 'craft' || closeup.isOpen || icebox.isOpen || !!env.localModal?.());
       syncControls();
       if (guideUntil > 0 && t > guideUntil) { ui.guide(null); guideCaption(null); guideUntil = 0; }
-      ui.companionVisible(craneOut && env.isOpened() && !arrival.classList.contains('show') && !paper.isOpen && !notebook.isOpen && !closeup.isOpen && !env.localModal?.() && mode !== 'desk' && mode !== 'craft' && mode !== 'brush');
+      ui.companionVisible(craneOut && env.isOpened() && !arrival.classList.contains('show') && !paper.isOpen && !notebook.isOpen && !closeup.isOpen && !icebox.isOpen && !env.localModal?.() && mode !== 'desk' && mode !== 'craft' && mode !== 'brush');
       help.hidden = !env.isOpened() || !q.guideMet || mode !== 'walk' || !ui.companionDocked || !!env.localModal?.();
       if (mode === 'walk' && !script && q.walkLearned && !q.met && !c.inside && !c.fair && Math.abs(player.x - kenta.x) < 30) run(talk());
       refreshObjective();
@@ -1238,7 +1262,7 @@ export function createStory(o: {
 
       }
       closeup.draw(t, dt, P);
-      shodo.draw(t, dt); handwork.draw(dt);
+      shodo.draw(t, dt); handwork.draw(dt); icebox.draw(t, dt);
 
       // A missed appointment leaves a recoverable trace rather than blocking the day.
       const visit = q.invitedDay > q.day ? q.visit : nextVisit(q.visit, c.tau, c.inside);
@@ -1336,7 +1360,7 @@ export function createStory(o: {
     /** called on any touch: a ring and a sound, everywhere */
     touch(e: PointerEvent) { wakeAudio(); inkRing(card, e.clientX, e.clientY); },
     // debug hooks for headless checks
-    _dbg: { q, kenta, hana, fox, closeup, shodo, handwork, run, startBrush, get mode() { return mode; }, get picked() { return picked; }, drawingAt },
+    _dbg: { q, kenta, hana, fox, closeup, icebox, shodo, handwork, run, startBrush, get mode() { return mode; }, get picked() { return picked; }, drawingAt },
   };
 }
 export type Story = ReturnType<typeof createStory>;

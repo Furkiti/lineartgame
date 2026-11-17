@@ -226,6 +226,40 @@ async function launchGame({
     );
     await page.locator("#act").tap();
   }
+  // the icebox close-up, with real touches: swing the door, wipe the mist, note what is missing,
+  // cut the string, lower the fish onto the tray
+  async function icebox({ shot = '', note = true } = {}) {
+    const adv = (s) => debug ? page.evaluate((s) => window.__step(s), s) : page.waitForTimeout(s * 1000);
+    const until = async (fn, what) => { for (let i = 0; i < 80; i++) { if (await page.evaluate(fn)) return; await adv(.25); } throw Error('icebox: ' + what); };
+    const box = () => window.__game.story._dbg.icebox;
+    const at = (pts) => page.evaluate((pts) => pts.map((p) => window.__game.story._dbg.icebox._client(p)), pts);
+    await action('Dolabı aç');
+    await until(() => window.__game.story._dbg.icebox.isOpen, 'opens');
+    await adv(.8);
+    if (shot) await page.screenshot({ path: shot + '-1-door.png' });
+    const P = await page.evaluate(() => window.__game.story._dbg.icebox._pts);
+    await stroke(await at(Array.from({ length: 12 }, (_, i) => [P.HANDLE[0] - i * 17, P.HANDLE[1] + i])), 30);
+    await until(() => window.__game.story._dbg.icebox.phase === 'wipe', 'door swings open');
+    await adv(.8);
+    if (shot) await page.screenshot({ path: shot + '-2-mist.png' });
+    const zig = []; for (let y = P.IN.y0 + 10; y < P.IN.y1; y += 22) { zig.push([P.IN.x0 + 12, y], [P.IN.x1 - 12, y + 11]); }
+    await stroke(await at(zig), 20);
+    await until(() => window.__game.story._dbg.icebox.phase === 'cut', 'mist wiped');
+    await adv(1);
+    if (note) { const [m] = await at([P.MISSING[0]]); await page.touchscreen.tap(m[0], m[1]); await adv(.5); }
+    if (shot) await page.screenshot({ path: shot + '-3-shelves.png' });
+    await stroke(await at([[P.PKG.cx - 34, P.PKG.cy - 44], [P.PKG.cx - 10, P.PKG.cy - 14], [P.PKG.cx + 10, P.PKG.cy + 14], [P.PKG.cx + 34, P.PKG.cy + 44]]), 30);
+    await until(() => window.__game.story._dbg.icebox.phase === 'take', 'string cut');
+    await adv(.6);
+    if (shot) await page.screenshot({ path: shot + '-4-open-parcel.png' });
+    const fish = await page.evaluate(() => window.__game.story._dbg.icebox._fish);
+    const pts = Array.from({ length: 16 }, (_, i) => [fish[0] + (P.TRAY[0] - fish[0]) * i / 15, fish[1] + (P.TRAY[1] - 12 - fish[1]) * i / 15]);
+    await stroke(await at(pts), 30);
+    await adv(.4);
+    if (shot) await page.screenshot({ path: shot + '-5-tray.png' });
+    await until(() => !window.__game.story._dbg.icebox.isOpen, 'closes with the fish');
+    void box;
+  }
   async function choice(i) {
     await page.waitForSelector(".choices.show");
     await page.locator(".choices.show button").nth(i).tap();
@@ -296,6 +330,7 @@ async function launchGame({
     paperDraw,
     parts,
     action,
+    icebox,
     choice,
     ready,
     home,

@@ -58,7 +58,7 @@ let d;
   await d.outside();
   await d.home();
   await d.walkTo(1654, 356);
-  await d.action("Dolabı aç");
+  await d.icebox();
   await wait(() => window.__game.home.prep === 1);
   await p.waitForTimeout(2200);
   await d.walkTo(1591, 356);
