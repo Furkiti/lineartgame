@@ -1,9 +1,9 @@
 {
   "name": "Mürekkep Sokağı",
-  "version": "0.11.0",
-  "commit": "4074ffca017fbb0406777a386f02feaa285ef881",
-  "shortCommit": "4074ffc",
+  "version": "0.11.1",
+  "commit": "cb407a8ba88eaa594b90a1aba33d4686b8064999",
+  "shortCommit": "cb407a8",
   "branch": "main",
-  "message": "Buz dolabı yakın planı: aç, sil, kes, tepsiye indir",
-  "deployedAt": "2026-11-17T12:07:15Z"
+  "message": "Akşam saatleri artık hızlanmıyor",
+  "deployedAt": "2026-11-17T12:57:15Z"
 }
