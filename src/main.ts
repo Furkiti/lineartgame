@@ -112,6 +112,7 @@ canalL.insertBefore(waterHit, canalL.children[2] || null);
 // ------------------------------------------------------------------ villagers
 const people = [];
 const spawn = { kimono: 2, bike: 7, kid: 4 };
+let hushAfter = 0;
 function addPerson(kind: 'kimono' | 'bike' | 'kid', x?: number) {
   const dir = Math.random() < 0.5 ? 1 : -1;
   const sx = x ?? (dir > 0 ? -60 : W + 60);
@@ -521,7 +522,12 @@ run((t, dt) => {
   // villagers
   if (!started) { started = true; addPerson('kimono', 520); addPerson('kimono', 860); addPerson('bike', 700); }
   const dayish = tau > 0.28 && tau < 0.72, lateNight = tau > 0.96 || tau < 0.22;
+  // a scene is playing (a talk, the alley, the kite): passers-by keep out of it
+  const hush = !!story?.hush && !inside && !inFair && !inMarket;
+  if (hush) hushAfter = 4;
+  else hushAfter -= dt;
   for (const k in spawn) {
+    if (hushAfter > 0) break;
     spawn[k] -= dt * 1.4;
     if (spawn[k] < 0) {
       if (k === 'kimono') { spawn[k] = rnd(9, 16); if (!lateNight || Math.random() < 0.3) addPerson('kimono'); }
@@ -532,6 +538,7 @@ run((t, dt) => {
   for (let i = people.length - 1; i >= 0; i--) {
     const p = people[i];
     p.draw(t, dt, P, wind);
+    if (hush) { p.hushed = Math.min(1, (p.hushed ?? 0) + dt * 2.2); p.g.style.opacity = String(1 - p.hushed); if (p.hushed >= 1) p.done = true; }
     if (!p.greeted && near(p.x, player.x, 18, p.y, player.y, 7)) { p.greeted = true; p.poke(); }
     if (p.done) { p.remove(); people.splice(i, 1); } else if (p.ringing && Math.random() < dt * 4) sparrows.flush();
   }

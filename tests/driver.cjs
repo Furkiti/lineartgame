@@ -343,13 +343,12 @@ async function launchGame({
   const advance = (s) => debug ? page.evaluate((s) => window.__step(s), s) : page.waitForTimeout(s * 1000);
   async function home() {
     if (await page.evaluate(() => window.__game.inside)) return;
-    await walkTo(457, 365);
-    // the first time home, the stepping stones are only pencil: press them in on the beat
+    // the first time home, the alley is only pencil: stop on the ink ring at its mouth and draw it in on the beat
     if (!(await page.evaluate(() => window.__game.story._dbg.alley.built))) {
-      for (let i = 0; i < 160 && !(await page.evaluate(() => window.__game.story._dbg.alley.playing)); i++) { await drive(0, (await page.evaluate(() => window.__game.story.mode)) === 'walk' ? -1 : 0); await advance(.15); }
-      await drive(0, 0);
+      await walkTo(433, 361);
       await alley();
     }
+    await walkTo(457, 365);
     await walkTo(457, 327, { inside: true });
   }
   /** touch as each ring settles on its stone (late = a crooked stone, but always a stone) */

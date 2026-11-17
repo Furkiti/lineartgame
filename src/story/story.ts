@@ -22,14 +22,14 @@ import { START, ITEMS, DISH_BOXES, PIECES, type Box, normalize, normalizeDishes,
 import { createNotebook, SKETCH, type Entry } from './notebook.ts';
 import { createPaper, fitLine, fitDrawing, linePath } from './paper.ts';
 import { MOTIFS } from './motifs.ts';
-import { createAlley, normalizeStones, STONES, BEAT, type Stone } from './alley.ts';
+import { createAlley, normalizeStones, STONES, STAND, BEAT, type Stone } from './alley.ts';
 import { nextVisit, timeRate, type Visit } from './schedule.ts';
 import { type SavedGame } from './save.ts';
 import { createResident } from './resident.ts';
 import { createHandwork } from './handwork.ts';
 import { SEATS } from './dining.ts';
 import { DAYS, nextChapter, dayComplete, eveningTarget } from './journey.ts';
-import { sfx, haptic, wakeAudio, inkRing, approach, clamp01, easeOut, backOut } from './fx.ts';
+import { sfx, haptic, wakeAudio, inkRing, approach, clamp01, easeOut, easeIn, backOut, lerp } from './fx.ts';
 
 type Home = {
   root: SVGGElement; surfaces: SVGGElement; beginSleep(): void; guestSeat: number; diningGuest: { x: number; y: number; hand: Vec; head: Vec } | null; guestReach: Vec | null; offeredLast: boolean; newDay(): void; canEat: boolean; canCook: boolean; busy: boolean; made: number; setPlateDesign(pattern: 'row' | 'triangle', garnish?: boolean): void; takePlate(): void; fromIcebox(t?: Topping): void; storeDish(): Topping[]; takeDish(t: Topping[]): void; readonly plate: Topping[]; readonly topping: Topping; iceboxPrompt: string | null; windowOpen: boolean; decorateTable(paths: string[]): void;
@@ -47,6 +47,8 @@ type Wait = number | (() => boolean);
 type Scene = Generator<Wait, void, unknown>;
 
 const KENTA_HOME: Vec = [285, 357];
+/** where you stop, at Kenta's left, the first time you meet */
+const MEET_GAP = 30;
 const STUCK: Vec = [316, 196];
 // home is down the alley in the middle of the street: the little gate at its end
 const DOOR_X = 457;
@@ -108,11 +110,22 @@ export function createStory(o: {
 
   // your home, from outside: a wooden nameplate, a mailbox, and a blank paper lantern
   const homeFront = el('g', {}, layers.front);
+  // where home is, said the way this street says things: a red seal stamped over your gate (家, home),
+  // and on the pavement, the spot to stop at — an ink ring with two geta prints in it
   const homeBeacon = el('g', { opacity: 0, 'pointer-events': 'none', 'data-home-beacon': '' }, layers.front);
-  el('rect', { x: 439, y: 277, width: 36, height: 70, rx: 12, fill: '#f5d48c', 'fill-opacity': .18, stroke: '#b94c3e', 'stroke-width': .8, 'stroke-dasharray': '2 3' }, homeBeacon);
-  el('ellipse', { cx: 457, cy: 348, rx: 17, ry: 5, fill: '#f5d48c', 'fill-opacity': .25, stroke: '#b94c3e', 'stroke-width': .65 }, homeBeacon);
-  el('rect', { x: 446, y: 260, width: 22, height: 12, rx: 5, fill: '#fff8e9', stroke: '#b94c3e', 'stroke-width': .6 }, homeBeacon);
-  const homeLabel = el('text', { x: 457, y: 268.3, 'text-anchor': 'middle', 'font-size': 7.5, fill: '#a13f35', 'font-family': 'Georgia,serif' }, homeBeacon); homeLabel.textContent = 'Ev';
+  const sealG = el('g', {}, homeBeacon);
+  el('rect', { x: -4.6, y: -4.6, width: 9.2, height: 9.2, rx: 1.3, fill: '#b94c3e', stroke: '#8e3328', 'stroke-width': .35 }, sealG);
+  el('rect', { x: -3.7, y: -3.7, width: 7.4, height: 7.4, rx: .8, fill: 'none', stroke: '#fbf3e6', 'stroke-width': .35 }, sealG);
+  const sealT = el('text', { x: 0, y: .3, 'font-size': 6, 'font-weight': 700, 'text-anchor': 'middle', 'dominant-baseline': 'central', fill: '#fbf3e6', 'font-family': '"Hiragino Mincho ProN","Yu Mincho","Noto Serif JP",serif' }, sealG); sealT.textContent = '家';
+  const sealCap = el('text', { x: 6.4, y: 1.4, 'font-size': 3.6, 'font-style': 'italic', fill: '#8e3328', 'font-family': 'Georgia,serif', stroke: PAPER, 'stroke-width': .9, 'paint-order': 'stroke' }, sealG); sealCap.textContent = 'evim';
+  const sealSplash = el('ellipse', { cx: 0, cy: 0, rx: 5, ry: 5, fill: 'none', stroke: '#b94c3e', 'stroke-width': .6, opacity: 0 }, homeBeacon);
+  let sealAt = -1; // -1 not stamped yet · ≥0 seconds since it was stamped
+  const standMark = el('g', { opacity: 0, 'pointer-events': 'none', 'data-stand-mark': '' }, layers.front);
+  const markPulse = el('ellipse', { cx: STAND[0], cy: STAND[1] + 1, rx: 9, ry: 2.8, fill: 'none', stroke: '#b94c3e', 'stroke-width': .5 }, standMark);
+  el('ellipse', { cx: STAND[0], cy: STAND[1] + 1, rx: 8, ry: 2.5, fill: '#f5d48c', 'fill-opacity': .35, stroke: '#b94c3e', 'stroke-width': .75, 'stroke-dasharray': '7 1.4 3 1.2' }, standMark);
+  el('path', { d: `M${STAND[0] - 2.6} ${STAND[1] + .2}l1.6 0l.3 1.9l-2.1 0Z M${STAND[0] + 1} ${STAND[1] - .6}l1.6 0l.3 1.9l-2.1 0Z`, fill: '#b94c3e', opacity: .7 }, standMark);
+  // a little ink drop bobbing over it, until you are close
+  const markDrop = el('path', { d: `M${STAND[0]} ${STAND[1] - 4}c-1.6 -2.2 -2.4 -3.6 -2.4 -4.8a2.4 2.4 0 0 1 4.8 0c0 1.2 -.8 2.6 -2.4 4.8Z`, fill: '#b94c3e', stroke: PAPER, 'stroke-width': .5 }, standMark);
   el('path', { d: `M${PLATE[0] - 4.6} ${PLATE[1] - 11} L${PLATE[0] + 4.6} ${PLATE[1] - 11} L${PLATE[0] + 4.6} ${PLATE[1] + 11} L${PLATE[0] - 4.6} ${PLATE[1] + 11}Z`, fill: '#e8d2a6', stroke: 'currentColor', 'stroke-width': 0.7 }, homeFront);
   const plateText = el('text', { x: PLATE[0], y: PLATE[1] - 1, 'font-size': 6.2, 'font-weight': 700, 'text-anchor': 'middle', 'dominant-baseline': 'central', 'writing-mode': 'vertical-rl', 'font-family': '"Hiragino Mincho ProN","Yu Mincho","Noto Serif JP",serif', fill: 'currentColor' }, homeFront);
   plateText.textContent = '旅人';
@@ -316,17 +329,24 @@ export function createStory(o: {
   let purpose: Purpose = 'kite';
   const pad = document.createElement('div'); pad.className = 'brushpad'; card.appendChild(pad);
   const toWorld = (cx: number, cy: number): Vec => { const p = svg.createSVGPoint(); p.x = cx; p.y = cy; const m = svg.getScreenCTM(); const r = m ? p.matrixTransform(m.inverse()) : p; return [r.x, r.y]; };
+  // the drawing patch (an ellipse around drawingAt): how far out a point is (1 = on its edge), and the point pulled back inside
+  const AREA = { rx: 50, ry: 59 };
+  const inArea = (p: Vec) => { const a = drawingAt(); return Math.hypot((p[0] - a[0]) / AREA.rx, (p[1] - a[1]) / AREA.ry); };
+  const areaClamp = (p: Vec): Vec => { if (purpose !== 'kite') return p; const k = inArea(p); if (k <= 1) return p; const a = drawingAt(); return [a[0] + (p[0] - a[0]) / k, a[1] + (p[1] - a[1]) / k]; };
   let drawing = false, lastPt: { p: Vec; t: number } | null = null, fails = 0, lanternStrokes = 0;
   pad.addEventListener('pointerdown', (e) => {
     if (mode !== 'brush') return;
     e.preventDefault(); pad.setPointerCapture(e.pointerId); wakeAudio();
+    const p = toWorld(e.clientX, e.clientY);
+    // only the paper patch takes ink: a touch outside it just shows where to draw
+    if (purpose === 'kite' && inArea(p) > 1) { focusPatch.animate([{ strokeOpacity: .32 }, { strokeOpacity: 1, strokeWidth: 1.4 }, { strokeOpacity: .32 }], { duration: 520 }); sfx.tap(); return; }
     drawing = true; brushIdle = 0; stroke.clear(); ui.hideGesture(); env.tip(null);
-    const p = toWorld(e.clientX, e.clientY); stroke.add(p, 0); lastPt = { p, t: performance.now() };
+    stroke.add(p, 0); lastPt = { p, t: performance.now() };
     sfx.paper();
   });
   pad.addEventListener('pointermove', (e) => {
     if (!drawing) return;
-    const p = toWorld(e.clientX, e.clientY), now = performance.now();
+    const p = areaClamp(toWorld(e.clientX, e.clientY)), now = performance.now();
     const sp = lastPt ? Math.hypot(p[0] - lastPt.p[0], p[1] - lastPt.p[1]) / Math.max(1, now - lastPt.t) * 1000 : 0;
     stroke.add(p, sp); lastPt = { p, t: now };
   });
@@ -463,10 +483,12 @@ export function createStory(o: {
     }
   }
 
+  let meetStep = false; // the first meeting: you settle at Kenta's left side
   function* talk(): Scene {
     mode = 'cine'; obj = null; ui.guide(null); focusOn = () => [kenta.x, kenta.y]; ui.hint(playerHead, null);
     const x0 = Math.min(player.x, kenta.x), x1 = Math.max(player.x, kenta.x);
     cam = fit(x0 - 45, 268, x1 + 45, 382, 2.2);
+    meetStep = true;
     player.faceTo = kenta.x > player.x ? 0.25 : Math.PI - 0.25;
     kenta.dir = player.x < kenta.x ? -1 : 1;
     kenta.want.sad = 0.4;
@@ -479,6 +501,7 @@ export function createStory(o: {
     cam = fit(kenta.x - 65, 220, kenta.x + 90, 390, 2);
     kenta.want.sad = 0.2;
     yield* sayLine(kentaHead, 'Sen çok güzel çiziyorsun. Bana yenisini çizer misin?');
+    meetStep = false;
     startBrush('kite');
   }
 
@@ -576,33 +599,28 @@ export function createStory(o: {
     const a = yield* choose(['Gel, birlikte yeriz.', 'Başka akşam olsun.']);
     if (a === 0) {
       q.dinner = 'kenta'; q.visit = 'planned'; q.invitedDay = q.day; kenta.hop(); ui.heart(kentaHead()); sfx.pop();
-      ui.say(kentaHead, 'Yaşasın! Akşam görüşürüz!');
+      ui.say(kentaHead, 'Yaşasın! Akşam görüşürüz!', 1.9);
     } else {
       q.dinner = 'alone'; kenta.want.sad = 0.5;
-      ui.say(kentaHead, 'Olur. Yarın uçururken görüşürüz!');
-      yield 2.4; kenta.want.sad = 0;
+      ui.say(kentaHead, 'Olur. Yarın uçururken görüşürüz!', 1.9);
     }
-    yield 2.8;
-    focusOn = null; kenta.faceTarget = null; kenta.want.talk = 0;
+    yield 1.5;
+    // he runs off with his kite; the crane is already on its way down while he goes
+    focusOn = null; kenta.faceTarget = null; kenta.want.talk = 0; kenta.want.sad = 0;
     departing = true; kenta.want.wave = .65; kenta.walkTo(600, 357);
-    yield () => kenta.x > player.x + 175;
-    departing = false; q.kentaAway = true; kenta.g.style.display = 'none';
-    yield .4;
-    // now someone has a reason to show you the way: the paper crane comes down to meet you
     cam = null; mode = 'walk';
     craneOut = craneScene = true; ui.companionArrive(); ui.guide(() => [player.x + 18, player.y - 44]);
     let flying = 0;
-    yield () => (flying += ctx.dt) > 5 || ui.craneAt()[1] > player.y - 80 && flying > 1.2;
+    yield () => (flying += ctx.dt) > 3 || ui.craneAt()[1] > player.y - 80 && flying > .8;
     mode = 'cine'; focusOn = () => ui.craneAt();
     yield* craneLine(`Merhaba ${who()}! Ben Turna, yol arkadaşın.`);
-    yield* craneLine(q.dinner === 'kenta' ? 'Akşama misafirin var. Önce evine gidelim.' : 'Gün uzun. Önce evini göstereyim.');
-    yield* craneLine('Evin bu tarafta. Peşimden gel!');
+    yield* craneLine(q.dinner === 'kenta' ? 'Akşama misafirin var. Gel, evini göstereyim!' : 'Gel, önce evini göstereyim!');
     q.homeShown = true; focusOn = null; mode = 'walk'; craneScene = false;
     // it flies ahead to the mouth of the stone alley and waits there while you walk
     const mouth = (): Vec => [DOOR_X, Math.max(300, Math.min(player.y - 40, 318))];
     ui.guide(mouth); toDoor();
     let waited = 0;
-    yield () => { waited += ctx.dt; return ctx.inside || Math.abs(player.x - DOOR_X) < 22 && player.y < 352 || waited > 45; };
+    yield () => { waited += ctx.dt; return ctx.inside || (!alley.built && atStand()) || alley.built && Math.abs(player.x - DOOR_X) < 22 && player.y < 352 || waited > 45; };
     if (!ctx.inside && waited <= 45 && !alley.built) { yield* buildAlley(); return; }
     if (!ctx.inside && waited <= 45) yield* craneLine('İşte! Ara sokağın sonu senin evin.');
     ui.guide(null);
@@ -616,15 +634,19 @@ export function createStory(o: {
   alley.stones = q.alley;
   svg.querySelectorAll('[data-static-stones]').forEach(n => (n as SVGElement).style.display = 'none');
   let alleyY = 0;
+  /** at the ink ring at the mouth of the alley: stop here and the alley is drawn */
+  const atStand = () => Math.abs(player.x - STAND[0]) < 11 && Math.abs(player.y - STAND[1]) < 10;
   function* buildAlley(): Scene {
-    mode = 'alley'; obj = null; env.tip(null); focusOn = null;
-    ui.guide(() => [DOOR_X + 13, 296]);
-    cam = fit(DOOR_X - 44, 268, DOOR_X + 44, 374, 3.4);
-    yield .9;
+    mode = 'alley'; obj = null; env.tip(null); focusOn = null; ui.hideGesture();
+    ui.guide(() => [DOOR_X + 17, 290]);
+    cam = fit(DOOR_X - 46, 256, DOOR_X + 46, 374, 3.4);
+    yield .6;
+    sealAt = 0;
+    yield .5;
     yield* craneLine('İşte evin! Ama yolu daha kurşun kalemle duruyor.');
-    yield* craneLine('Her adımda bir taş bas. Halka taşa oturunca dokun.');
+    yield* craneLine('Halka taşa indiği an dokun. Yolu birlikte çizelim.');
     alley.start(ctx.t);
-    env.tip('Halka taşa oturduğu an ekrana dokun.', true);
+    env.tip('Halka taşın üstüne indiği an ekrana dokun.', true);
     ui.showGesture('tap', () => [[STONES[0][0], STONES[0][1]]], { period: BEAT });
     yield () => alley.stones.length > 0;
     ui.hideGesture(); env.tip(null);
@@ -632,10 +654,9 @@ export function createStory(o: {
     q.alley = alley.stones.map(s => ({ ...s }));
     ui.guide(null); sfx.chime();
     const great = q.alley.filter(s => s.q >= 1).length;
-    think(great >= 4 ? 'Evimin yolu. Adımlarım gibi düzgün.' : great >= 2 ? 'Evimin yolu. Biraz yamuk, tam benim gibi.' : 'Yamuk yumuk ama benim yolum.', 3.2);
-    yield 3.2;
+    think(great >= 4 ? 'Evimin yolu. Adımlarım gibi düzgün.' : great >= 2 ? 'Evimin yolu. Biraz yamuk, tam benim gibi.' : 'Yamuk yumuk ama benim yolum.', 2.6);
+    yield 2.4;
     yield* craneLine('Taşlar adımını hatırlar. Her eve dönüşünde çalarlar.');
-    yield* craneLine('Yolunu ararsan beni köşede bul, bana dokun.');
     q.guideMet = true;
     mode = 'walk'; cam = null;
     env.tip('Taşların üstünden yukarı yürü. Kapın orada.', true);
@@ -1189,6 +1210,8 @@ export function createStory(o: {
   else { mode = 'walk'; if (q.kite !== 'done') setObj(kentaHead, () => nearKenta(), false); }
   refreshDots();
   return {
+    /** a scene is playing on the street: nobody else should wander through it */
+    get hush() { return mode === 'cine' || mode === 'alley' || mode === 'brush' && purpose === 'kite' || q.homeShown && !alley.built || !q.met && q.walkLearned; },
     get freeze() { return mode !== 'walk' || notebook.isOpen || paper.isOpen || !!env.localModal?.(); },
     get clockRate() {
       const base = timeRate(mode, q.day, q.kite === 'done', notebook.isOpen || paper.isOpen || handwork.isOpen || !!env.localModal?.());
@@ -1207,7 +1230,7 @@ export function createStory(o: {
     snapshot() { return { story: { ...q, fresh: [...q.fresh] }, art: { ...art, kite: kiteLine, lantern: lanternLines, toy: toy.line, cooking: closeup.snapshot() } }; },
     get cam() { return cam; },
     get sitting() { return seated ? 1 : 0; },
-    get facing() { if (mode === 'alley') return -Math.PI / 2; if (!focusOn) return null; const p = focusOn(); return Math.atan2((p[1] - player.y) * .6, p[0] - player.x); },
+    get facing() { if (mode === 'alley') return Math.atan2((292 - STAND[1]) * .6, DOOR_X - STAND[0]); if (!focusOn) return null; const p = focusOn(); return Math.atan2((p[1] - player.y) * .6, p[0] - player.x); },
     get mode() { return mode; },
     get closeupOpen() { return closeup.isOpen; },
     /** what the action button says, if the story has something to offer */
@@ -1253,27 +1276,31 @@ export function createStory(o: {
       if (guideUntil > 0 && t > guideUntil) { ui.guide(null); guideCaption(null); guideUntil = 0; }
       ui.companionVisible(craneOut && env.isOpened() && !arrival.classList.contains('show') && !paper.isOpen && !notebook.isOpen && !closeup.isOpen && !icebox.isOpen && !grocer.isOpen && !env.localModal?.() && mode !== 'desk' && mode !== 'craft' && mode !== 'brush');
       help.hidden = !env.isOpened() || !q.guideMet || mode !== 'walk' || !ui.companionDocked || !!env.localModal?.();
-      if (mode === 'walk' && !script && q.walkLearned && !q.met && !c.inside && !c.fair && Math.abs(player.x - kenta.x) < 30) run(talk());
+      // you never walk past Kenta before you have met: you stop at his left and the kite scene begins
+      if (!q.met && q.kite === 'sad' && !c.inside && !c.fair && kenta.g.style.display !== 'none' && player.x > kenta.x - 120 && player.x < kenta.x + 40) player.x = Math.min(player.x, kenta.x - MEET_GAP);
+      if (mode === 'walk' && (!script || !blocks) && q.walkLearned && !q.met && !c.inside && !c.fair && player.x > kenta.x - MEET_GAP - 14 && player.x < kenta.x + 40) run(talk());
       refreshObjective();
       if (q.day >= 2 && q.dayIntro < q.day && mode === 'walk' && !script && !c.fair) run(secondMorning());
       if (script) { if (waitFn) { if (waitFn()) { waitFn = null; advance(); } } else { waitT -= dt; if (waitT <= 0) advance(); } }
       // the stepping stones: the ring, the step onto each pressed stone, the notes on the way home
       alley.update(t, dt);
-      const stand = alley.standY;
-      if (stand !== null && !c.inside && !c.fair) { player.x = approach(player.x, DOOR_X, 6, dt); player.y = approach(player.y, stand, 7, dt); }
+      if (meetStep) { player.x = approach(player.x, kenta.x - MEET_GAP, 5, dt); player.y = approach(player.y, kenta.y + 6, 5, dt); }
+      const hold = mode === 'alley' ? STAND : alley.hold;
+      if (hold && !c.inside && !c.fair) { player.x = approach(player.x, hold[0], 6, dt); player.y = approach(player.y, hold[1], 6, dt); }
       if (!c.inside && !c.fair) alley.stepOn(player.y, alleyY || player.y);
       alleyY = c.inside || c.fair ? 0 : player.y;
       if (!c.inside && !c.fair) alley.gate(player.y, dt, P.lamp);
       if (c.inside) alley.openGate();
-      if (!alley.built && mode === 'walk' && !script && q.homeShown && !c.inside && !c.fair && Math.abs(player.x - DOOR_X) < 14 && player.y < 355) run(buildAlley());
+      if (!alley.built && mode === 'walk' && !script && q.homeShown && !c.inside && !c.fair && atStand()) run(buildAlley());
 
       if (!q.met && q.kite === 'sad' && Math.abs(player.x - kenta.x) < 145 && !c.inside) stuck.release();
       // Kenta takes the actual kite away; he returns on a later day or for dinner.
       if (q.visit === 'waiting') kenta.g.style.display = '';
       if (kenta.g.style.display !== 'none') {
         if (mode === 'walk' && q.day < 3 && !script && !departing && q.visit !== 'waiting' && q.kite === 'done' && !kenta.walking && Math.random() < dt * .2) kenta.walkTo(265 + Math.random() * 45, 353 + Math.random() * 8);
-        kenta.speed = departing ? 40 : q.day >= 3 ? 32 : q.kite === 'done' ? 14 : 20;
+        kenta.speed = departing ? 58 : q.day >= 3 ? 32 : q.kite === 'done' ? 14 : 20;
         if (departing && t > nextHop) { nextHop = t + .58; kenta.hop(); }
+        if (departing && (kenta.x > 590 || kenta.x > player.x + 260)) { departing = false; q.kentaAway = true; kenta.g.style.display = 'none'; }
         kenta.faceTarget = !departing && (q.kite !== 'done' || !!focusOn) ? player.x : null;
         kenta.want.talk = !departing && focusOn && !c.inside ? 1 : 0;
         kenta.draw(t, dt, P);
@@ -1281,7 +1308,27 @@ export function createStory(o: {
         else if ((q.kentaAway && q.day === 1) || (P.night > .5 && q.kite === 'done' && mode === 'walk')) kenta.g.style.display = 'none';
       }
       if (c.inside && !q.visitedHome) { q.visitedHome = true; env.tip(null); }
-      homeBeacon.setAttribute('opacity', f(q.homeShown && !q.visitedHome && mode !== 'alley' && !c.inside && !c.fair ? .7 + Math.sin(t * 2) * .2 : 0));
+      // the seal over the gate: stamped when the alley is first shown, there until you have been home
+      const sealOn = q.homeShown && !q.visitedHome && !c.inside && !c.fair && (sealAt >= 0 || alley.built);
+      if (sealOn && sealAt < 0) sealAt = 1;
+      if (sealAt >= 0) {
+        const was = sealAt; sealAt += dt;
+        const u = clamp01(sealAt / .22);
+        if (was < .22 && sealAt >= .22) { sfx.knock(); haptic(14); }
+        const sc = lerp(2.2, 1, easeIn(u)), bob = u >= 1 ? Math.sin(t * 1.6) * .5 : 0;
+        sealG.setAttribute('transform', `translate(457 ${f(265 + bob)}) rotate(-4) scale(${f(sc)})`);
+        sealG.setAttribute('opacity', f(u));
+        const sp = clamp01((sealAt - .22) / .5);
+        sealSplash.setAttribute('transform', 'translate(457 265)'); sealSplash.setAttribute('rx', f(5 + sp * 6)); sealSplash.setAttribute('ry', f(5 + sp * 6)); sealSplash.setAttribute('opacity', f(sp > 0 && sp < 1 ? .7 * (1 - sp) : 0));
+      }
+      homeBeacon.setAttribute('opacity', sealOn ? '1' : '0');
+      // the spot to stop at, on the pavement, until the alley is drawn
+      const markOn = q.homeShown && !alley.built && mode === 'walk' && !c.inside && !c.fair && Math.abs(player.x - STAND[0]) < 190;
+      standMark.setAttribute('opacity', f(approach(+(standMark.getAttribute('opacity') ?? 0), markOn ? 1 : 0, 6, dt)));
+      const pu = (t * .8) % 1;
+      markPulse.setAttribute('rx', f(9 + pu * 9)); markPulse.setAttribute('ry', f(2.8 + pu * 2.8)); markPulse.setAttribute('opacity', f(1 - pu));
+      const far = clamp01((Math.hypot(player.x - STAND[0], player.y - STAND[1]) - 12) / 20);
+      markDrop.setAttribute('transform', `translate(0 ${f(-Math.abs(Math.sin(t * 3)) * 3)})`); markDrop.setAttribute('opacity', f(far));
       if (mode === 'brush' && purpose === 'kite' && !drawing) {
         brushIdle += dt;
         if (brushIdle > 9 && brushIdle < 9 + dt * 2) {

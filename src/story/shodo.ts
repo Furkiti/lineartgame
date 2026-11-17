@@ -114,6 +114,9 @@ export function createShodo(card: HTMLElement, { onDone, onExit }: { onDone: (st
   let scale = 1, ox = 0, oy = 0, now = 0, lastT = 0;
   const toPaper = (e: PointerEvent): Vec => { const r = svg.getBoundingClientRect(); return [(e.clientX - r.left - ox) / scale, (e.clientY - r.top - oy) / scale]; };
 
+  // the ink stays on the hanshi: a brush that slides off the sheet stops at its edge
+  const onSheet = (p: Vec) => p[0] > -8 && p[0] < 108 && p[1] > -14 && p[1] < 114;
+  const sheetClamp = (p: Vec): Vec => [Math.max(-5, Math.min(105, p[0])), Math.max(-11, Math.min(111, p[1]))];
   function showStroke() {
     const s = CHA[i];
     guide.setAttribute('d', 'M' + s.pts.map(pt).join('L'));
@@ -125,12 +128,15 @@ export function createShodo(card: HTMLElement, { onDone, onExit }: { onDone: (st
   }
   svg.addEventListener('pointerdown', (e) => {
     if (!open || !started || finishT >= 0 || i >= CHA.length) return;
-    e.preventDefault(); svg.setPointerCapture(e.pointerId);
-    down = true; user = [toPaper(e)]; ghostT = -1; idle = 0; sfx.paper();
+    e.preventDefault();
+    const p0 = toPaper(e);
+    if (!onSheet(p0)) return; // the felt is not the paper
+    svg.setPointerCapture(e.pointerId);
+    down = true; user = [sheetClamp(p0)]; ghostT = -1; idle = 0; sfx.paper();
   });
   svg.addEventListener('pointermove', (e) => {
     if (!down) return;
-    const p = toPaper(e), l = user[user.length - 1];
+    const p = sheetClamp(toPaper(e)), l = user[user.length - 1];
     if (Math.hypot(p[0] - l[0], p[1] - l[1]) > 0.8) user.push(p);
     wet.setAttribute('d', user.length > 1 ? brush(user, 6.4, CHA[i].sweep) : '');
   });

@@ -182,17 +182,18 @@ export function buildStreet(layers, defs, { treeOffset = 0 } = {}) {
   const alley = g(back);
   S(alley, rect(432, 250, 482, BASE), SP * 0.6);
   // side walls receding to a small gate; plank lines follow the perspective
-  S(alley, 'M432 258 L449 286 L449 306 L432 344Z', SP * 0.6);
-  S(alley, 'M482 258 L465 286 L465 306 L482 344Z', SP * 0.6);
-  P(alley, 'M436 265 L436 337 M440 271 L440 330 M444 278 L444 322 M478 265 L478 337 M474 271 L474 330 M470 278 L470 322', SP * 0.4);
-  S(alley, rect(449, 288, 465, 306), SP * 0.7);
-  S(alley, 'M446 289 L468 289 L465 283 L449 283Z', SP * 0.7);
-  P(alley, 'M457 289 L457 306', SP * 0.5);
+  // (in the story the alley draws itself instead: see story/alley.ts)
+  const stones = g(alley); stones.setAttribute('data-static-stones', '');
+  S(stones, 'M432 258 L449 286 L449 306 L432 344Z', SP * 0.6);
+  S(stones, 'M482 258 L465 286 L465 306 L482 344Z', SP * 0.6);
+  P(stones, 'M436 265 L436 337 M440 271 L440 330 M444 278 L444 322 M478 265 L478 337 M474 271 L474 330 M470 278 L470 322', SP * 0.4);
+  S(stones, rect(449, 288, 465, 306), SP * 0.7);
+  S(stones, 'M446 289 L468 289 L465 283 L449 283Z', SP * 0.7);
+  P(stones, 'M457 289 L457 306', SP * 0.5);
   // stepping stones shrinking into the distance
-  const stones = g(alley); stones.setAttribute('data-static-stones', ''); // the story presses its own, in ink
   [[457, 339, 7, 2.4], [456, 328, 5.6, 1.9], [458, 319, 4.4, 1.5], [457, 312, 3.4, 1.1]].forEach(([x, y, rx, ry]) => S(stones, oval(x, y, rx, ry), SP * 0.5));
-  const alleyLamp = pane(alley, glow, 453.5, 293, 460.5, 301, { thr: 0.05, lateOff: 9 });
-  P(alley, 'M457 293 L457 301 M453.5 297 L460.5 297', SP * 0.4);
+  const alleyLamp = pane(stones, glow, 453.5, 293, 460.5, 301, { thr: 0.05, lateOff: 9 });
+  P(stones, 'M457 293 L457 301 M453.5 297 L460.5 297', SP * 0.4);
 
   // ================= H1 · sake shop (酒屋) x 18–236
   const h1 = g(hg);
