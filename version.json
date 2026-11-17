@@ -1,9 +1,9 @@
 {
   "name": "Mürekkep Sokağı",
-  "version": "0.10.0",
-  "commit": "a5613e7d18243c79a2cb5e0aadf7e4c6d9fa1c80",
-  "shortCommit": "a5613e7",
+  "version": "0.11.0",
+  "commit": "4074ffca017fbb0406777a386f02feaa285ef881",
+  "shortCommit": "4074ffc",
   "branch": "main",
-  "message": "İlk sabah: adın, Kenta'nın uçurtması, Turna'nın eve götürmesi",
-  "deployedAt": "2026-11-16T18:16:10Z"
+  "message": "Buz dolabı yakın planı: aç, sil, kes, tepsiye indir",
+  "deployedAt": "2026-11-17T12:07:15Z"
 }
