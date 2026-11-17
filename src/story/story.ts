@@ -1154,7 +1154,12 @@ export function createStory(o: {
       // Completed work lets the light drift into evening; there is no skip-time menu.
       if(ctx?.fair) return base;
       const target = eveningTarget(q, home.step === 6, q.dinner === 'kenta' && ['planned', 'waiting'].includes(q.visit));
-      return base === 1 && ctx && ctx.tau < target ? (q.day === 1 ? home.step === 6 && !q.sushi ? 18 : 12 : 24) : base;
+      // The quiet afternoon may pass quickly, but the light never hurries: the drift slows down
+      // smoothly through late afternoon and is back to normal by 16:48, so dusk, sunset and the
+      // evening (17:00 onwards) always run at the ordinary pace (one game hour ≈ 37 s).
+      const stop = Math.min(target, .70), k = q.day === 1 ? home.step === 6 && !q.sushi ? 18 : 12 : 24;
+      if (base !== 1 || !ctx || ctx.tau >= stop) return base;
+      return 1 + (k - 1) * Math.min(1, (stop - ctx.tau) / .04);
     },
     get canSnapshot() { return q.created && q.walkLearned && !notebook.isOpen && !home.busy && (mode === 'walk' && !script || handwork.isOpen || paper.isOpen || closeup.isOpen); },
     get canSave() { return q.created && q.walkLearned && mode === 'walk' && !script && !paper.isOpen && !home.busy; },
