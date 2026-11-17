@@ -1,9 +1,9 @@
 {
   "name": "Mürekkep Sokağı",
-  "version": "0.12.0",
-  "commit": "b472744162043442c34b5aa2877d72b903285105",
-  "shortCommit": "b472744",
+  "version": "0.13.0",
+  "commit": "9899959e91e717ef78bb4f0680a58053eba852d9",
+  "shortCommit": "9899959",
   "branch": "main",
-  "message": "Dolap kiler oldu: malzeme rafları, yemeklerim rafı, Ume'nin manavı",
-  "deployedAt": "2026-11-17T13:45:14Z"
+  "message": "Ara sokak taşları, şablonlu çizimler, kutuya dizilen altı nigiri",
+  "deployedAt": "2026-11-17T16:46:26Z"
 }
