@@ -76,6 +76,20 @@ export const sfx = {
   nope() { tone(330, { dur: 0.15, gain: 0.05, type: 'triangle' }); tone(262, { at: 0.1, dur: 0.22, gain: 0.05, type: 'triangle' }); },
   /** rice stirring: a soft swish whose pitch follows speed */
   stir(speed: number) { noise({ dur: 0.08, gain: 0.025 + Math.min(0.04, speed * 0.004), freq: 900 + speed * 60, q: 0.6 }); },
+  /** a stepping stone pressed in ink: a soft wooden note of the pentatonic scale (i = 0…4) */
+  stone(i: number, gain = 1) {
+    const fr = PENTA[Math.max(0, Math.min(PENTA.length - 1, i))] / 2;
+    tone(fr, { dur: 0.9, gain: 0.11 * gain, type: 'triangle', attack: 0.004 });
+    tone(fr * 2, { dur: 0.45, gain: 0.04 * gain, attack: 0.002 });
+    tone(fr * 3.01, { dur: 0.18, gain: 0.02 * gain, attack: 0.002 });
+    noise({ dur: 0.05, gain: 0.05 * gain, freq: 900, q: 0.7 });
+  },
+  /** the beat: a quiet wood block, like a geta on stone */
+  tick(accent = false) { noise({ dur: 0.035, gain: accent ? 0.05 : 0.028, freq: accent ? 1500 : 1100, q: 2.2 }); tone(accent ? 760 : 600, { dur: 0.05, gain: accent ? 0.025 : 0.014, type: 'triangle' }); },
+  /** a wooden door on its rail: the louder, the faster it moves */
+  slide(speed: number) { noise({ dur: 0.09, gain: Math.min(0.05, 0.008 + speed * 0.03), freq: 480 + speed * 300, q: 0.9 }); },
+  /** the door meets its post */
+  knock() { tone(150, { dur: 0.14, gain: 0.08, type: 'triangle' }); noise({ dur: 0.04, gain: 0.05, freq: 700, q: 1.2 }); },
   /** a hanko stamp */
   stamp() { tone(110, { dur: 0.2, gain: 0.12, type: 'sine' }); noise({ dur: 0.06, gain: 0.08, freq: 800 }); },
 };

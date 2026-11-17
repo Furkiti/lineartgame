@@ -60,3 +60,19 @@
 /* The icebox close-up: the same lit workbench paper as the kitchen close-up. */
 .icebox-view{position:absolute;inset:0;width:100%;height:100%;z-index:3;opacity:0;pointer-events:none;touch-action:none;color:#302d27;background:#f8efdb}
 .icebox-view.show{pointer-events:auto}
+
+/* tracing an outline on the drawing paper */
+.paper-trace{pointer-events:none}
+.paper-trace .trace-all{fill:none;stroke:#d8cbb3;stroke-width:9;stroke-linecap:round;stroke-linejoin:round;opacity:.55}
+.paper-trace .trace-now{fill:none;stroke:#252822;stroke-width:13;stroke-linecap:round;stroke-linejoin:round;opacity:.09;animation:traceBreathe 2.4s ease-in-out infinite}
+.paper-trace .trace-dash{fill:none;stroke:#bc5145;stroke-width:1.6;stroke-dasharray:3 4;animation:traceMarch 1.2s linear infinite}
+.paper-trace .trace-ghost{fill:none;stroke:#252822;stroke-width:2.4;stroke-linecap:round;stroke-dasharray:.1 6;opacity:0}
+.paper-trace .trace-start{fill:#bc5145;animation:traceDot 1.6s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+.paper-trace .trace-num{fill:#fff8e8;font:700 8px Georgia,serif}
+.drawing-paper.tracing .paper-ink{stroke-width:3.6}
+.paper-bloom{fill:none;stroke:#252822;stroke-width:3.6;stroke-linecap:round;stroke-linejoin:round;opacity:0;pointer-events:none}
+.paper-bloom.soak{animation:inkSoak .8s ease-out}
+@keyframes traceBreathe{50%{opacity:.16}}
+@keyframes traceMarch{to{stroke-dashoffset:-14}}
+@keyframes traceDot{50%{transform:scale(1.18)}}
+@keyframes inkSoak{0%{opacity:.5;stroke-width:3.6;filter:blur(0)}100%{opacity:0;stroke-width:14;filter:blur(2px)}}

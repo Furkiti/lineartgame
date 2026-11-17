@@ -109,6 +109,7 @@ export function createShodo(card: HTMLElement, { onDone, onExit }: { onDone: (st
   const sealT = mk('text', { 'font-size': 9, 'font-weight': 800, fill: '#fbf3e6', 'text-anchor': 'middle', 'dominant-baseline': 'central', 'font-family': '"Hiragino Mincho ProN","Yu Mincho",serif' }, seal);
   sealT.textContent = '旅';
 
+  let misses = 0;
   let open = false, op = 0, i = 0, user: Vec[] = [], down = false, scores: number[] = [], inked: string[] = [], finishT = -1, ghostT = -1, idle = 0, started = false;
   let scale = 1, ox = 0, oy = 0, now = 0, lastT = 0;
   const toPaper = (e: PointerEvent): Vec => { const r = svg.getBoundingClientRect(); return [(e.clientX - r.left - ox) / scale, (e.clientY - r.top - oy) / scale]; };
@@ -139,20 +140,25 @@ export function createShodo(card: HTMLElement, { onDone, onExit }: { onDone: (st
     wet.setAttribute('d', '');
     if (user.length < 3) return;
     const s = CHA[i];
-    const r = compare(user, s.pts, 0.35);
-    if (r.err < 10 && !r.reversed) {
+    // generous: either direction counts, and a second close try is pulled onto the template
+    const r0 = compare(user, s.pts, 0.35), rr = compare([...user].reverse(), s.pts, 0.35);
+    const r = rr.err < r0.err ? rr : r0;
+    const ok = r.err < 15 || (misses >= 1 && r.err < 24) || misses >= 3;
+    if (ok) {
+      const blend = r.err < 15 ? r.blend : compare(r === rr ? [...user].reverse() : user, s.pts, misses >= 3 ? 0 : 0.15).blend;
+      misses = 0;
       // accepted: the blended line is inked onto the paper
-      const d = brush(r.blend, 7, s.sweep);
+      const d = brush(blend, 7, s.sweep);
       const n = mk('path', { d, fill: '#1c1c1c', opacity: 0 }, done);
       n.style.transition = 'opacity .35s'; requestAnimationFrame(() => n.setAttribute('opacity', '0.93'));
-      inked.push(d); scores.push(clamp01(1 - r.err / 13));
+      inked.push(d); scores.push(clamp01(1 - r.err / 16));
       sfx.press(); haptic(8);
       i++;
       if (i < CHA.length) showStroke();
       else { guide.setAttribute('d', ''); guideDash.setAttribute('d', ''); startDot.setAttribute('opacity', '0'); startNum.textContent = ''; finishT = 0; }
     } else {
-      sfx.nope(); haptic(12);
-      tip.textContent = r.reversed ? 'Fırçayı kırmızı noktadan başlat.' : 'Soluk çizginin üstünden geç, acele etme.';
+      sfx.nope(); haptic(12); misses++;
+      tip.textContent = 'Soluk çizginin üstünden geç, acele etme.';
       tip.classList.add('show'); setTimeout(() => tip.classList.remove('show'), 2600);
       ghostT = 0;
     }
@@ -164,7 +170,7 @@ export function createShodo(card: HTMLElement, { onDone, onExit }: { onDone: (st
   const api = {
     get isOpen() { return open; },
     open() {
-      open = true; op = 0; i = 0; scores = []; inked = []; finishT = -1; started = false; done.innerHTML = '';
+      open = true; op = 0; i = 0; misses = 0; scores = []; inked = []; finishT = -1; started = false; done.innerHTML = '';
       mark.setAttribute('opacity', '0'); seal.setAttribute('opacity', '0'); startDot.setAttribute('opacity', '0.8');
       guide.setAttribute('d', ''); guideDash.setAttribute('d', ''); startNum.textContent = '';
       title.querySelector('b')!.textContent = 'Sipariş · çay evinin tabelası';
@@ -177,6 +183,8 @@ export function createShodo(card: HTMLElement, { onDone, onExit }: { onDone: (st
     _client(p: Vec): Vec { const r = svg.getBoundingClientRect(); return [r.left + ox + p[0] * scale, r.top + oy + p[1] * scale]; },
     _start() { order.querySelector('button')!.dispatchEvent(new MouseEvent('click')); },
     get _i() { return i; },
+    /** the template stroke to go over now, in paper units (headless checks) */
+    get _stroke() { return open && started && i < CHA.length ? CHA[i].pts : null; },
     draw(t: number, dt: number) {
       now = t; void lastT;
       op = approach(op, open ? 1 : 0, 6, dt);

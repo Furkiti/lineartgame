@@ -6,7 +6,8 @@ export function closestSeat(x: number, occupied = -1): 0 | 1 {
   const free = [0, 1].filter(i => i !== occupied);
   return free.reduce((a, b) => Math.abs(x - SEATS[a]) <= Math.abs(x - SEATS[b]) ? a : b) as 0 | 1;
 }
-export const mealTurn = (piece: number, shared: boolean): MealTurn => !shared || piece === 0 ? 'player' : piece === 1 ? 'guest' : 'offer';
+/** alone, every piece is yours; shared, you take turns and the last piece is offered across the table */
+export const mealTurn = (piece: number, shared: boolean, n = 3): MealTurn => !shared ? 'player' : piece >= n - 1 ? 'offer' : piece % 2 === 0 ? 'player' : 'guest';
 const between = (a: Vec, b: Vec, t: number): Vec => { const u = easeInOut(clamp01(t)); return [lerp(a[0], b[0], u), lerp(a[1], b[1], u) - Math.sin(Math.PI * u) * 2.5]; };
 export function biteMotion(t: number, turn: MealTurn, source: Vec, mouth: Vec, guestMouth: Vec, handoff: Vec) {
   const offering = turn === 'offer';

@@ -10,7 +10,7 @@
 // of something you have none of makes a mental note — the shopping list for the greengrocer.
 import { f, pt, type Vec } from '../lib/ink.ts';
 import { sfx, haptic, clamp01, lerp, easeOut, easeInOut, backOut, approach } from './fx.ts';
-import { ITEMS, ITEM_IDS, LOOK, PIECES, recipeFor, type Item, type Topping, type Pantry } from './pantry.ts';
+import { ITEMS, ITEM_IDS, LOOK, PIECES, recipeFor, type Item, type Topping, type Pantry, type Box } from './pantry.ts';
 
 const NS = 'http://www.w3.org/2000/svg';
 type Attrs = Record<string, string | number>;
@@ -40,7 +40,7 @@ const SPOTS: Record<Kind, Vec[]> = {
   mandalina: [[216, 247], [246, 247]],
   yumurta: [[78, 349], [100, 349], [122, 349], [144, 349]],
   'salatalık': [[214, 338], [214, 355]],
-  dish: [[84, 447], [111, 447], [138, 447], [184, 447], [211, 447], [238, 447]],
+  dish: [[111, 443], [213, 443]],   // two lacquer boxes (jūbako) of six
 };
 // the outline of one thing, drawn around its own origin
 const SHAPE: Record<Kind, string> = {
@@ -48,13 +48,13 @@ const SHAPE: Record<Kind, string> = {
   mandalina: ell(0, 0, 13, 12),
   yumurta: ell(0, 0, 9, 11.5),
   'salatalık': 'M-44 2 Q-46 -6 -36 -7 L38 -7 Q46 -6 45 1 Q44 7 36 7 L-36 7 Q-44 7 -44 2Z',
-  dish: 'M-12 3 Q-13 -9 0 -9 Q13 -9 12 3Z',
+  dish: rect(-42, -15, 42, 17),
 };
 export type IceboxResult =
   | { mode: 'take'; cook: Topping; used: Item[] }
-  | { mode: 'take'; serve: Topping[] }
+  | { mode: 'take'; serve: Topping[]; box: number }
   | { mode: 'store' };
-export type IceboxOpen = { mode: 'take' | 'store'; pantry: Pantry; dishes: Topping[]; carrying?: { items?: Item[]; pieces?: Topping[] }; wipe: boolean };
+export type IceboxOpen = { mode: 'take' | 'store'; pantry: Pantry; dishes: Box[]; carrying?: { items?: Item[]; pieces?: Topping[] }; wipe: boolean };
 
 export function createIcebox(card: HTMLElement, { onDone, onExit, onNote }: { onDone: (r: IceboxResult) => void; onExit: () => void; onNote: (missing: Item[]) => void }) {
   const svg = mk('svg', { class: 'icebox-view', viewBox: '0 0 320 540', preserveAspectRatio: 'xMidYMid meet', 'data-icebox': '' }) as SVGSVGElement;
@@ -118,11 +118,11 @@ export function createIcebox(card: HTMLElement, { onDone, onExit, onNote }: { on
   // the things themselves: on the shelves they sit behind the mist and the door; on the tray, or
   // in your hand, they come to the front
   const things = mk('g', {}, world);
-  type Thing = { kind: Kind; topping?: Topping; g: SVGGElement; pos: Vec; spot: number; tray: number; isNew: boolean; tied: boolean; cutT: number; parts?: { wrapL: SVGPathElement; wrapR: SVGPathElement; fold: SVGPathElement; strings: SVGPathElement[]; bits: SVGPathElement[] }; lift: number };
+  type Thing = { kind: Kind; topping?: Topping; tops?: Topping[]; spot0?: number; g: SVGGElement; pos: Vec; spot: number; tray: number; isNew: boolean; tied: boolean; cutT: number; parts?: { wrapL: SVGPathElement; wrapR: SVGPathElement; fold: SVGPathElement; strings: SVGPathElement[]; bits: SVGPathElement[] }; lift: number };
   let list: Thing[] = [];
-  function drawThing(kind: Kind, topping?: Topping) {
+  function drawThing(kind: Kind, topping?: Topping, tops?: Topping[]) {
     const g = mk('g', { 'data-thing': kind, ...(topping ? { 'data-topping': topping } : {}) }, things);
-    const t: Thing = { kind, topping, g, pos: [0, 0], spot: -1, tray: -1, isNew: false, tied: false, cutT: -1, lift: 0 };
+    const t: Thing = { kind, topping, tops, g, pos: [0, 0], spot: -1, tray: -1, isNew: false, tied: false, cutT: -1, lift: 0 };
     if (kind === 'somon') {
       fill(g, rect(-27, -11, 27, 13), LOOK.somon.fill, 1.8);
       ink(g, 'M-20 10 L-10 -8 M-8 10 L2 -8 M4 10 L14 -8 M16 10 L22 -2', 2, { stroke: LOOK.somon.line });
@@ -134,6 +134,7 @@ export function createIcebox(card: HTMLElement, { onDone, onExit, onNote }: { on
     } else if (kind === 'yumurta') fill(g, ell(0, 0, 9, 11.5), '#fbf6ea', 1.6);
     else if (kind === 'mandalina') { fill(g, ell(0, 0, 13, 12), C.orange, 1.6); ink(g, 'M-6 -4 q2 -3 5 -3', 1.2, { stroke: '#fbd29a' }); fill(g, 'M0 -12 q4 -7 10 -5 q-3 6 -10 5Z', C.leaf, 1); }
     else if (kind === 'salatalık') { fill(g, SHAPE['salatalık'], '#6f9d45', 1.6); ink(g, 'M-30 -2 l1 0 M-14 2 l1 0 M2 -3 l1 0 M18 1 l1 0 M32 -2 l1 0', 2, { stroke: '#d9e9bf' }); }
+    else if (tops) drawBoxFront(g, tops);
     else {
       const look = LOOK[topping ?? 'somon'];
       fill(g, 'M-12 3 Q-13 -5 0 -6 Q13 -5 12 3Z', PAPER, 1.4);
@@ -144,6 +145,70 @@ export function createIcebox(card: HTMLElement, { onDone, onExit, onNote }: { on
     list.push(t);
     return t;
   }
+
+  /** a lacquer box from the front: lid, band, a paper tag with what is inside */
+  function drawBoxFront(g: SVGGElement, tops: Topping[]) {
+    fill(g, rect(-40, -6, 40, 16), C.lacquer, 1.8);
+    fill(g, rect(-42, -14, 42, -5), '#5e2420', 1.8);
+    ink(g, 'M-40 4H40', 1, { stroke: '#d8b05a', opacity: .9 });
+    fill(g, rect(-14, -2, 14, 11), PAPER, 1);
+    tops.forEach((tp, i) => mk('circle', { cx: f(-10 + (i % 3) * 10), cy: f(i < 3 ? 2 : 7.4), r: 2.4, fill: LOOK[tp].fill, stroke: INK, 'stroke-width': .6 }, g));
+    mk('path', { d: 'M-4 -14 q4 -7 8 0', fill: 'none', stroke: '#c8423a', 'stroke-width': 1.6 }, g);
+  }
+
+  // ------------------------------------------------------------------ filling a box, seen from above
+  // the carried plate's nigiri go into the six compartments of a lacquer box, one by one;
+  // then the lid slides on, a red cord is tied, and the box goes onto the dish shelf
+  const BOXV = { x: 160, y: 236, w: 216, h: 150 };
+  const CELLS: Vec[] = [0, 1, 2, 3, 4, 5].map(i => [BOXV.x - BOXV.w / 3 + (i % 3) * BOXV.w / 3, BOXV.y - BOXV.h / 4 + Math.floor(i / 3) * BOXV.h / 2] as Vec);
+  const PLATE_Y = 420;
+  const fillG = mk('g', { opacity: 0, 'data-box-fill': '' }, world);
+  mk('rect', { x: -400, y: -400, width: 1120, height: 1400, fill: '#f3e6cc', opacity: .96 }, fillG);
+  const boxTop = mk('g', {}, fillG);
+  fill(boxTop, `M${BOXV.x - BOXV.w / 2 - 10} ${BOXV.y - BOXV.h / 2 - 10}h${BOXV.w + 20}v${BOXV.h + 20}h${-BOXV.w - 20}Z`, C.lacquer, 2.4);
+  fill(boxTop, `M${BOXV.x - BOXV.w / 2} ${BOXV.y - BOXV.h / 2}h${BOXV.w}v${BOXV.h}h${-BOXV.w}Z`, '#2b1715', 1.6);
+  const cellN = CELLS.map(([x, y], i) => {
+    const c = mk('g', { 'data-cell': i }, boxTop);
+    fill(c, rect(x - BOXV.w / 6 + 4, y - BOXV.h / 4 + 4, x + BOXV.w / 6 - 4, y + BOXV.h / 4 - 4), '#efe3c8', 1.2);
+    // a green baran leaf divider in each compartment
+    fill(c, `M${x - 22} ${y + 26} L${x - 14} ${y - 26} L${x - 8} ${y + 4} L${x - 2} ${y - 18} L${x + 2} ${y + 26}Z`, '#7f9f58', .9, { opacity: .55 });
+    const ring = mk('path', { d: ell(x, y, 24, 18), fill: 'none', stroke: '#c8423a', 'stroke-width': 1.4, 'stroke-dasharray': '3 4', opacity: 0 }, c);
+    return { c, ring };
+  });
+  const lid = mk('g', { opacity: 0 }, fillG);
+  fill(lid, `M${BOXV.x - BOXV.w / 2 - 12} ${BOXV.y - BOXV.h / 2 - 12}h${BOXV.w + 24}v${BOXV.h + 24}h${-BOXV.w - 24}Z`, '#5e2420', 2.4);
+  ink(lid, `M${BOXV.x - BOXV.w / 2} ${BOXV.y - BOXV.h / 2 + 6}h${BOXV.w}M${BOXV.x - BOXV.w / 2} ${BOXV.y + BOXV.h / 2 - 6}h${BOXV.w}`, 1.2, { stroke: '#d8b05a' });
+  mk('text', { x: BOXV.x, y: BOXV.y + 10, 'text-anchor': 'middle', 'font-size': 34, 'font-family': '"Hiragino Mincho ProN","Yu Mincho",serif', fill: '#d8b05a' }, lid).textContent = '重';
+  const cord = mk('g', { opacity: 0 }, fillG);
+  ink(cord, `M${BOXV.x} ${BOXV.y - BOXV.h / 2 - 14}V${BOXV.y + BOXV.h / 2 + 14}M${BOXV.x - BOXV.w / 2 - 14} ${BOXV.y}H${BOXV.x + BOXV.w / 2 + 14}`, 3, { stroke: '#c8423a' });
+  ink(cord, `M${BOXV.x} ${BOXV.y} q-18 -16 -26 -4 q8 10 26 4 q18 -16 26 -4 q-8 10 -26 4 l-8 22 M${BOXV.x} ${BOXV.y} l8 22`, 3, { stroke: '#c8423a' });
+  const geta2 = mk('g', {}, fillG);
+  fill(geta2, `M48 ${PLATE_Y - 18}H272L276 ${PLATE_Y + 20}H44Z`, C.woodLight, 2);
+  ink(geta2, `M56 ${PLATE_Y - 10}H264`, .8, { opacity: .4 });
+  const boxLabel = mk('text', { x: BOXV.x, y: BOXV.y + BOXV.h / 2 + 34, 'text-anchor': 'middle', 'font-size': 12, 'font-style': 'italic', 'font-family': '"Iowan Old Style", Georgia, serif', fill: INK }, fillG);
+  type Piece = { top: Topping; g: SVGGElement; pos: Vec; home: Vec; cell: number; lift: number; pop: number };
+  let pieces: Piece[] = [], boxT = -1, packed: Topping[] = [], boxSpot = -1, pdrag: { p: Piece; off: Vec } | null = null;
+  /** a nigiri from above: a rice oval and its topping */
+  function drawPieceTop(parent: Element, top: Topping) {
+    const g = mk('g', { 'data-piece': top }, parent);
+    mk('ellipse', { cx: 2, cy: 4, rx: 25, ry: 15, fill: INK, opacity: .14 }, g);
+    fill(g, ell(0, 0, 25, 15), PAPER, 1.6);
+    const L = LOOK[top];
+    fill(g, 'M-24 -4 Q-20 -15 0 -14 Q22 -14 26 -3 Q22 10 0 10 Q-22 10 -24 -4Z', L.fill, 1.5);
+    if (L.band) fill(g, 'M-4 -15 L5 -15 L5 11 L-4 11Z', L.band, 1);
+    else ink(g, 'M-14 -6 q8 -5 16 -4 M2 -8 q8 -2 14 2', 1.6, { stroke: L.line });
+    return g;
+  }
+  function openBox(tops: Topping[]) {
+    pieces.forEach(p => p.g.remove());
+    const n = tops.length;
+    pieces.forEach(p => p.g.remove());
+    pieces = tops.map((top, i) => { const home: Vec = [160 + (i - (n - 1) / 2) * 38, PLATE_Y - (i % 2) * 4]; return { top, g: drawPieceTop(fillG, top), pos: [...home] as Vec, home, cell: -1, lift: 0, pop: -1 }; });
+    packed = []; boxT = -1; pdrag = null;
+    lid.setAttribute('opacity', '0'); cord.setAttribute('opacity', '0');
+    [boxTop, lid, cord].forEach(n => n.removeAttribute('transform')); geta2.setAttribute('opacity', '1');
+  }
+  const freeCell = (p: Vec) => { let best = -1, d = 70; CELLS.forEach((c, i) => { const k = Math.hypot(c[0] - p[0], c[1] - p[1]); if (k < d && !pieces.some(x => x.cell === i)) { d = k; best = i; } }); return best; };
 
   // mist over the inside: a pale veil with a mask your finger wipes through
   const maskId = 'icebox-wipe';
@@ -184,7 +249,7 @@ export function createIcebox(card: HTMLElement, { onDone, onExit, onNote }: { on
   const ghostRing = mk('circle', { r: 9, fill: 'none', stroke: '#c8423a', 'stroke-width': 1.6, opacity: 0 }, ghostG);
 
   // ------------------------------------------------------------------ state
-  type Phase = 'door' | 'wipe' | 'main' | 'done';
+  type Phase = 'door' | 'wipe' | 'box' | 'main' | 'done';
   let open = false, op = 0, phase: Phase = 'door', phaseT = 0, idle = 0, mode: 'take' | 'store' = 'take', wipeToday = true;
   let doorOpen = 0, doorTarget = 0, dragging = false, finger: Vec | null = null, lastPt: Vec | null = null;
   let wipePath = '', covered = new Set<number>(), mistOp = 0;
@@ -193,7 +258,8 @@ export function createIcebox(card: HTMLElement, { onDone, onExit, onNote }: { on
   let ghost: { pts: Vec[]; t: number; period: number } | null = null, ghostOp = 0, taught: Partial<Record<Phase, boolean>> = {};
   const noted = new Set<Item>();
   const GRID = { cols: 9, rows: 12 };
-  const stepsOf = () => (['door', ...(wipeToday ? ['wipe'] : []), 'main'] as Phase[]);
+  const stepsOf = () => (['door', ...(wipeToday ? ['wipe'] : []), boxing ? 'box' : 'main'] as Phase[]);
+  let boxing = false;
 
   const onTray = () => list.filter(t => t.tray >= 0).sort((a, b) => a.tray - b.tray);
   const spotFree = (kind: Kind, i: number) => !list.some(t => t.kind === kind && t.spot === i && t !== drag?.t);
@@ -202,10 +268,11 @@ export function createIcebox(card: HTMLElement, { onDone, onExit, onNote }: { on
   function relayTray() { onTray().forEach((t, i) => (t.tray = i)); }
   const tied = () => list.find(t => t.tied && t.spot >= 0);
 
-  const TITLES = (p: Phase) => p === 'door' ? 'Kapağı aç' : p === 'wipe' ? 'Buğuyu sil' : mode === 'store' ? 'Dolaba diz' : 'Tepsiye indir';
+  const TITLES = (p: Phase) => p === 'door' ? 'Kapağı aç' : p === 'wipe' ? 'Buğuyu sil' : p === 'box' ? 'Kutuyu doldur' : mode === 'store' ? 'Dolaba diz' : 'Tepsiye indir';
   function tipFor(p: Phase) {
     if (p === 'door') return 'Pirinç kolu tut, kapağı sola doğru çek.';
     if (p === 'wipe') return 'İçerisi buğulanmış. Parmağınla sil.';
+    if (p === 'box') return 'Nigirileri kutunun gözlerine tek tek yerleştir.';
     if (mode === 'store') return 'Tepsidekileri raftaki kesik çizgili yerlerine sürükle.';
     const salmon = tied();
     return salmon ? 'Pişireceğini ya da hazır bir yemeği tepsiye indir. Somonun ipini önce tek çizgiyle kes.' : 'Pişireceğini ya da hazır bir yemeği tepsiye indir.';
@@ -222,6 +289,7 @@ export function createIcebox(card: HTMLElement, { onDone, onExit, onNote }: { on
   function teach() {
     if (phase === 'door') ghost = { pts: [[HANDLE[0], HANDLE[1]], [HANDLE[0] - 70, HANDLE[1] + 6], [HANDLE[0] - 150, HANDLE[1] + 4]], t: 0, period: 2.4 };
     if (phase === 'wipe') ghost = { pts: Array.from({ length: 9 }, (_, i) => [90 + (i % 2) * 140, 200 + i * 30] as Vec), t: 0, period: 3 };
+    if (phase === 'box') { const pc = pieces.find(x => x.cell < 0), c = CELLS.findIndex((_, i) => !pieces.some(x => x.cell === i)); if (pc && c >= 0) ghost = { pts: [[...pc.pos], [...CELLS[c]]], t: 0, period: 2.2 }; return; }
     if (phase !== 'main') return;
     if (mode === 'store') {
       const t = onTray()[0]; if (!t) return;
@@ -256,7 +324,7 @@ export function createIcebox(card: HTMLElement, { onDone, onExit, onNote }: { on
     }
   }
   const hitThing = (p: Vec) => [...list].reverse().find(t => {
-    const s = t.kind === 'somon' ? [34, 18] : t.kind === 'salatalık' ? [46, 10] : [16, 15];
+    const s = t.kind === 'somon' ? [34, 18] : t.kind === 'salatalık' ? [46, 10] : t.kind === 'dish' ? [44, 18] : [16, 15];
     return Math.abs(p[0] - t.pos[0]) < s[0] && Math.abs(p[1] - t.pos[1]) < s[1];
   });
   const canMove = (t: Thing) => mode === 'store' ? t.isNew : !t.isNew;
@@ -265,17 +333,14 @@ export function createIcebox(card: HTMLElement, { onDone, onExit, onNote }: { on
   function trayState() {
     const items = onTray();
     if (!items.length) return { group: '' as '' | 'dish' | Topping, done: false, label: '' };
-    if (items[0].kind === 'dish') {
-      const left = list.some(t => t.kind === 'dish' && t.spot >= 0);
-      return { group: 'dish' as const, done: items.length >= PIECES || !left, label: `${items.length} parça` };
-    }
+    if (items[0].kind === 'dish') return { group: 'dish' as const, done: true, label: `${items[0].tops?.length ?? 0} parça` };
     const r = recipeFor(items[0].kind as Item)!;
     const [[need, n]] = Object.entries(r.needs) as [Item, number][];
     return { group: r.id, done: items.length >= n, label: `${r.name} · ${items.length}/${n} ${ITEMS[need].name.toLowerCase()}` };
   }
   function accepts(t: Thing) {
     const s = trayState();
-    if (t.kind === 'dish') return !s.group || s.group === 'dish' ? true : 'Tepside pişirilecek bir şey var.';
+    if (t.kind === 'dish') return !s.group ? true : 'Tepside başka bir şey var.';
     const r = recipeFor(t.kind as Item);
     if (!r) return `${ITEMS[t.kind as Item].name} tatlılık; yemeğe gerekmez.`;
     if (!s.group) return true;
@@ -288,6 +353,11 @@ export function createIcebox(card: HTMLElement, { onDone, onExit, onNote }: { on
     e.preventDefault(); svg.setPointerCapture(e.pointerId);
     const p = local(e); finger = p; lastPt = null; dragging = true; idle = 0; ghost = null;
     if (phase === 'wipe') { wipeAt(p); lastPt = p; return; }
+    if (phase === 'box') {
+      const pc = [...pieces].reverse().find(x => x.cell < 0 && Math.hypot(p[0] - x.pos[0], p[1] - x.pos[1]) < 30);
+      if (pc && boxT < 0) { pdrag = { p: pc, off: [pc.pos[0] - p[0], pc.pos[1] - p[1]] }; fillG.appendChild(pc.g); sfx.tap(); haptic(6); } else dragging = false;
+      return;
+    }
     if (phase === 'door') { if (Math.hypot(p[0] - HANDLE[0], p[1] - HANDLE[1]) > 60 && !(p[0] > 120 && p[1] > 160 && p[1] < 474)) dragging = false; return; }
     // an empty place of something you have none of: a note for the market
     const place = (e.target as Element).closest?.('[data-place]');
@@ -295,7 +365,7 @@ export function createIcebox(card: HTMLElement, { onDone, onExit, onNote }: { on
     if (!t && place) {
       const kind = place.getAttribute('data-place') as Kind, i = +place.getAttribute('data-place-i')!;
       if (kind !== 'dish' && !list.some(x => x.kind === kind)) { noted.add(kind); note(SPOTS[kind][i], `${ITEMS[kind].name} bitmiş`); sfx.paper(); haptic(5); }
-      else if (kind === 'dish') note(SPOTS.dish[i], 'Pişirdiklerin burada durur');
+      else if (kind === 'dish') note(SPOTS.dish[i], 'Bir kutu yemek buraya sığar');
       dragging = false; return;
     }
     if (t && !t.tied && canMove(t)) { drag = { t, off: [t.pos[0] - p[0], t.pos[1] - p[1]], from: { spot: t.spot, tray: t.tray } }; t.spot = -1; t.tray = -1; relayTray(); sfx.tap(); haptic(6); return; }
@@ -308,6 +378,7 @@ export function createIcebox(card: HTMLElement, { onDone, onExit, onNote }: { on
     const p = local(e);
     if (phase === 'door') doorOpen = doorTarget = clamp01((HANDLE[0] - p[0]) / 190);
     if (phase === 'wipe') { wipeAt(p); lastPt = p; if (Math.random() < .25) sfx.stir(2); }
+    if (phase === 'box' && pdrag) pdrag.p.pos = [p[0] + pdrag.off[0], p[1] + pdrag.off[1]];
     if (phase === 'main') {
       if (drag) drag.t.pos = [p[0] + drag.off[0], p[1] + drag.off[1]];
       else if (slashPts.length) {
@@ -323,6 +394,13 @@ export function createIcebox(card: HTMLElement, { onDone, onExit, onNote }: { on
   const up = () => {
     if (!dragging) return;
     dragging = false; lastPt = null; slashPts = [];
+    if (phase === 'box' && pdrag) {
+      const pc = pdrag.p; pdrag = null;
+      const c = freeCell(pc.pos);
+      if (c >= 0) { pc.cell = c; pc.pop = 0; packed[c] = pc.top; sfx.stone(Math.min(4, pieces.filter(x => x.cell >= 0).length - 1), .7); haptic(10); }
+      else sfx.nope();
+      if (pieces.every(x => x.cell >= 0)) { boxT = 0; sfx.success(); }
+    }
     if (phase === 'door') { if (doorOpen > .38) { doorTarget = 1; sfx.paper(); haptic(10); } else doorTarget = 0; }
     if (phase === 'main' && drag) {
       const { t, from } = drag; drag = null;
@@ -348,7 +426,7 @@ export function createIcebox(card: HTMLElement, { onDone, onExit, onNote }: { on
       const s = trayState();
       if (!s.done) return;
       const items = onTray();
-      result = s.group === 'dish' ? { mode: 'take', serve: items.map(t => t.topping!) } : { mode: 'take', cook: s.group as Topping, used: items.map(t => t.kind as Item) };
+      result = s.group === 'dish' ? { mode: 'take', serve: [...(items[0].tops ?? [])], box: items[0].spot0 ?? 0 } : { mode: 'take', cook: s.group as Topping, used: items.map(t => t.kind as Item) };
       doneT = 0; sfx.success(); haptic(14);
     }
   }
@@ -362,7 +440,8 @@ export function createIcebox(card: HTMLElement, { onDone, onExit, onNote }: { on
     get noted() { return [...noted]; },
     /** for headless checks: a sheet point in client pixels */
     _client(p: Vec): Vec { const m = svg.getScreenCTM()!; const q = svg.createSVGPoint(); q.x = p[0]; q.y = p[1]; const r = q.matrixTransform(m); return [r.x, r.y]; },
-    _pts: { HANDLE, TRAY, IN, SPOTS },
+    _pts: { HANDLE, TRAY, IN, SPOTS, CELLS },
+    get _pieces() { return pieces.map(p => ({ top: p.top, pos: p.pos, cell: p.cell })); },
     /** where each thing is (headless checks drag them) */
     get _things() { return list.map(t => ({ kind: t.kind, topping: t.topping, pos: t.pos, spot: t.spot, tray: t.tray, tied: t.tied, isNew: t.isNew })); },
     open(o: IceboxOpen) {
@@ -372,11 +451,14 @@ export function createIcebox(card: HTMLElement, { onDone, onExit, onNote }: { on
       list.forEach(t => t.g.remove()); list = [];
       // what is already inside, in its places
       for (const id of ITEM_IDS) for (let i = 0; i < o.pantry[id]; i++) { const t = drawThing(id); t.spot = i; t.pos = [...SPOTS[id][i]]; }
-      o.dishes.forEach((top, i) => { const t = drawThing('dish', top); t.spot = i; t.pos = [...SPOTS.dish[i]]; });
+      o.dishes.forEach((tops, i) => { const t = drawThing('dish', undefined, tops); t.spot = t.spot0 = i; t.pos = [...SPOTS.dish[i]]; });
+      // a plate you carry is packed into a box first, seen from above
+      boxing = !!o.carrying?.pieces?.length; boxSpot = o.dishes.length; boxT = -1; pdrag = null;
+      fillG.setAttribute('opacity', '0');
+      if (boxing) { openBox(o.carrying!.pieces!.slice(0, PIECES)); svg.appendChild(fillG); svg.appendChild(ghostG); }
       // what you brought, laid out on the tray
       const carry: Thing[] = [];
       (o.carrying?.items ?? []).forEach(id => carry.push(drawThing(id)));
-      (o.carrying?.pieces ?? []).forEach(top => carry.push(drawThing('dish', top)));
       carry.forEach((t, i) => { t.isNew = true; t.tray = i; t.pos = trayPos(i, carry.length); if (t.kind === 'somon') t.tied = true; });
       // a dish shelf holds two plates' worth; never more than there is room for
       svg.style.display = 'block'; svg.classList.add('show');
@@ -406,7 +488,7 @@ export function createIcebox(card: HTMLElement, { onDone, onExit, onNote }: { on
       door.setAttribute('transform', `translate(${HINGE} 0) scale(${f(s)} 1) translate(${-HINGE} 0)`);
       doorFace.setAttribute('fill', s < 0 ? C.woodDark : C.woodLight);
       doorPanel.setAttribute('opacity', s < 0 ? '0' : '.6');
-      if (phase === 'door' && doorOpen > .97 && doorTarget === 1) { if (wipeToday) { mistOp = 1; setPhase('wipe'); } else setPhase('main'); }
+      if (phase === 'door' && doorOpen > .97 && doorTarget === 1) { if (wipeToday) { mistOp = 1; setPhase('wipe'); } else setPhase(boxing ? 'box' : 'main'); }
       puffs.forEach((p, i) => {
         const age = phase === 'door' ? 0 : clamp01((phaseT - i * .15) / 1.6);
         const x = 90 + i * 46, y = 240 - age * 90;
@@ -414,9 +496,45 @@ export function createIcebox(card: HTMLElement, { onDone, onExit, onNote }: { on
         p.setAttribute('opacity', f(phase !== 'door' && phase !== 'done' && age < 1 && phaseT < 2 ? (1 - age) * .55 : 0));
       });
 
+      // filling the box: the view tilts to look down into it
+      const showBox = phase === 'box' || (boxT >= 0 && boxT < 2.6);
+      fillG.setAttribute('opacity', f(approach(+(fillG.getAttribute('opacity') ?? 0), showBox ? 1 : 0, 6, dt)));
+      fillG.style.display = +(fillG.getAttribute('opacity') ?? 0) > .01 ? '' : 'none';
+      if (phase === 'box' || boxT >= 0) {
+        const placed = pieces.filter(x => x.cell >= 0).length;
+        boxLabel.textContent = boxT < 0 ? `${placed} / ${pieces.length}` : 'Afiyetle saklanır.';
+        cellN.forEach((c, i) => c.ring.setAttribute('opacity', f(pdrag && !pieces.some(x => x.cell === i) ? .6 + Math.sin(t * 6) * .25 : !pieces.some(x => x.cell === i) && i < pieces.length ? .25 : 0)));
+        for (const pc of pieces) {
+          if (pc !== pdrag?.p) { const g = pc.cell >= 0 ? CELLS[pc.cell] : pc.home; pc.pos = [approach(pc.pos[0], g[0], 14, dt), approach(pc.pos[1], g[1], 14, dt)]; }
+          pc.lift = approach(pc.lift, pc === pdrag?.p ? 1 : 0, 12, dt);
+          if (pc.pop >= 0) pc.pop += dt;
+          const squash = pc.pop >= 0 && pc.pop < .35 ? Math.sin(pc.pop / .35 * Math.PI) * .12 : 0;
+          pc.g.setAttribute('transform', `translate(${f(pc.pos[0])} ${f(pc.pos[1] - pc.lift * 8)}) scale(${f(1 + pc.lift * .1 + squash)} ${f(1 + pc.lift * .1 - squash)})`);
+        }
+        if (boxT >= 0) {
+          boxT += dt;
+          // the lid slides on from the top, the cord is tied, then it all shrinks onto the shelf
+          const u = easeInOut(clamp01((boxT - .2) / .6));
+          lid.setAttribute('opacity', f(u > 0 ? 1 : 0)); lid.setAttribute('transform', `translate(0 ${f((1 - u) * -300)})`);
+          if (boxT > .8 && boxT - dt <= .8) { sfx.knock(); haptic(12); }
+          const k = clamp01((boxT - 1.0) / .4); cord.setAttribute('opacity', f(k)); cord.setAttribute('transform', `translate(${BOXV.x} ${BOXV.y}) scale(${f(backOut(k))}) translate(${-BOXV.x} ${-BOXV.y})`);
+          if (boxT > 1.1 && boxT - dt <= 1.1) sfx.paper();
+          const fly = easeInOut(clamp01((boxT - 1.6) / .9));
+          const to = SPOTS.dish[Math.min(SPOTS.dish.length - 1, boxSpot)];
+          const sc = lerp(1, 84 / (BOXV.w + 24), fly);
+          pieces.forEach(x => x.g.setAttribute('opacity', boxT > .85 ? '0' : '1'));
+          [boxTop, lid, cord].forEach(n => n.setAttribute('transform', `translate(${f(lerp(0, to[0] - BOXV.x, fly))} ${f(lerp(0, to[1] - BOXV.y, fly))}) translate(${BOXV.x} ${BOXV.y}) scale(${f(sc)}) translate(${-BOXV.x} ${-BOXV.y})` + (n === lid ? ` translate(0 ${f((1 - u) * -300)})` : '')));
+          geta2.setAttribute('opacity', f(1 - fly));
+          if (boxT > 2.5 && doneT < 0) {
+            const th = drawThing('dish', undefined, packed.filter(Boolean)); th.spot = th.spot0 = Math.min(SPOTS.dish.length - 1, boxSpot); th.pos = [...SPOTS.dish[th.spot]];
+            result = { mode: 'store' }; doneT = 0; setPhase('done'); haptic(14);
+          }
+        }
+      }
+
       // mist, wiped away
       mist.setAttribute('opacity', f(mistOp));
-      if (phase === 'wipe' && covered.size > GRID.cols * GRID.rows * .5) { sfx.chime(); haptic(10); setPhase('main'); }
+      if (phase === 'wipe' && covered.size > GRID.cols * GRID.rows * .5) { sfx.chime(); haptic(10); setPhase(boxing ? 'box' : 'main'); }
       if (phase !== 'wipe' && phase !== 'door') mistOp = approach(mistOp, 0, 3, dt);
 
       // outlines: an empty place breathes a little; a filled one hides under its thing

@@ -78,7 +78,7 @@ let d;
   await d.stroke(circles, 35);
   await wait(() => window.__game.story._dbg.closeup._step === 1);
   await p.waitForTimeout(1100);
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 6; i++) {
     const pts = await p.evaluate(() =>
       [
         [258, 150],
@@ -92,7 +92,7 @@ let d;
   await d.holdUntil([65,680],()=>window.__game.story._dbg.closeup._shapes.every(s=>s>=1));
   await wait(() => window.__game.story._dbg.closeup._step === 3);
   await p.waitForTimeout(1200);
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 6; i++) {
     const pts = await p.evaluate((i) => {
       const c = window.__game.story._dbg.closeup;
       return [c._plating.sources[i], c._plating.slots[i]].map(([x, y]) =>
@@ -107,11 +107,6 @@ let d;
   assert.equal(await p.evaluate(() => window.__game.home.step), 5);
   await d.walkTo(1486, 356);
   await wait(() => window.__game.home.step === 6);
-  await d.action("Pencereyi arala");
-  await d.ready();
-  await d.action("Sofrayı süsle");
-  await d.paperDraw();
-  await d.ready();
   await wait(() => window.__game.home.canEat, 45000);
   await d.action('Birlikte ye');
   await p.waitForTimeout(1150);
@@ -135,8 +130,7 @@ let d;
   await d.outside();
   await d.walkTo(600, 356);
   await d.action("Hana ile konuş");
-  await d.choice(0);
-  await d.paperDraw();
+  await d.shodo();
   await d.choice(1);
   await d.ready();
   assert.equal(

@@ -66,12 +66,7 @@ async function settle() {
     ),
   );
   assert.equal(await p.evaluate(() => window.__game.home.canEat), false);
-  await d.action("Pencereyi arala");
-  await settle();
-  await d.action("Sofrayı süsle");
-  await d.paperDraw();
-  await settle();
-  await step(20);
+  await step(24);
   assert.equal(await p.evaluate(() => window.__game.home.canEat), true);
   assert(
     !(await p.locator("[data-world-hint]").textContent()).includes("Kenta"),
@@ -95,8 +90,6 @@ async function settle() {
 
   p = await open(seed({ order: false }));
   await d.action("Hana ile konuş");
-  await until(".choices.show");
-  await d.choice(1);
   await until(".shodo.show");
   await p.waitForSelector(".sh-order.show");
   await p.locator(".sh-order button").tap();
@@ -229,7 +222,7 @@ async function settle() {
   assert.equal(
     (await p.evaluate(() => window.__game.story.snapshot().art.toyDrawing))
       .length,
-    2,
+    1,
   );
   console.log(
     "PASS farther cat, arbitrary two-stroke toy, invite-home choice and no floating night eyes",
@@ -309,9 +302,7 @@ async function settle() {
     await settled();
     const b = await p.locator("#act").boundingBox();
     assert(Math.abs(a.y - b.y) < 0.5);
-    await d.action("Hana ile konuş");
-    await until(".choices.show");
-    await d.choice(0);
+    await p.evaluate(() => window.__game.story._dbg.startBrush("lantern"));
     await until(".drawing-paper.show");
     await p.waitForTimeout(600);
     await p.screenshot({ path: `.local/v5-edge-paper-${viewport.width}.png` });
@@ -333,9 +324,7 @@ async function settle() {
     "PASS larger phone and landscape: stable controls, readable drawing area, cancellable tasks",
   );
   p = await open(seed({ order: false }));
-  await d.action("Hana ile konuş");
-  await until(".choices.show");
-  await d.choice(0);
+  await p.evaluate(() => window.__game.story._dbg.startBrush("lantern"));
   await until(".drawing-paper.show");
   await d.stroke(
     await d.mapSVG(".paper-canvas", [
@@ -346,7 +335,6 @@ async function settle() {
     ]),
     50,
   );
-  assert(await p.evaluate(() => localStorage.getItem("ink-street-draft-v1")));
   await p.locator("[data-action=leave]").tap();
   await settle();
   p.once("dialog", (dialog) => dialog.accept());

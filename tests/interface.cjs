@@ -172,7 +172,7 @@ async function settle(){
   );
 
   p = await stage(
-    base({ day: 1, dayIntro: 1, visitedHome: false }, { x: 450 }),
+    base({ day: 1, dayIntro: 1, visitedHome: false, alley: [1, 1, 1, 1, 1].map((q) => ({ q, tilt: 0 })) }, { x: 450 }),
   );
   await step(1);
   await step(12);
@@ -200,7 +200,7 @@ async function settle(){
     1,
     "a tap is not a slicing gesture",
   );
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 6; i++) {
     const pts = await p.evaluate(() =>
       [
         [258, 150],
@@ -215,12 +215,12 @@ async function settle(){
     await p.evaluate(() => window.__game.story._dbg.closeup._step),
     2,
   );
-  await d.hold([65,680],.45);
+  await d.hold([65,680],.3);
   const partial=await p.evaluate(()=>window.__game.story._dbg.closeup._shapes[0]);
   assert(partial>.25&&partial<.6);
   await step(1);
   assert.equal(await p.evaluate(()=>window.__game.story._dbg.closeup._shapes[0]),partial,'release stops rice shaping');
-  await d.hold([65,680],3.7);
+  await d.hold([65,680],4.8);
   await step(1.5);
   assert.equal(
     await p.evaluate(() => window.__game.story._dbg.closeup._step),
@@ -239,7 +239,7 @@ async function settle(){
   assert.equal(await p.locator('[data-pattern]').count(),0,'the plate layout is shown, not chosen');
   const foodBox=await p.locator('[data-nigiri="0"]').boundingBox();
   assert(foodBox.width>55,'plating view keeps the nigiri large enough to arrange');
-  for (let i = 0; i < 3; i++) {
+  for (let i = 0; i < 6; i++) {
     const pts = await p.evaluate((i) => {
       const c = window.__game.story._dbg.closeup;
       return [c._plating.sources[i], c._plating.slots[i]].map(([x, y]) =>
@@ -254,7 +254,7 @@ async function settle(){
     const c = window.__game.story._dbg.closeup;
     return c._plating.slots.map(([x, y]) => { const [cx, cy] = c._client([x, y - 8]); return !!document.elementFromPoint(cx, cy)?.closest('[data-nigiri]'); });
   });
-  assert.deepEqual(onTop, [true, true, true], 'plated nigiri are drawn over the geta');
+  assert.deepEqual(onTop, [true, true, true, true, true, true], 'plated nigiri are drawn over the geta');
   await p.screenshot({ path: '.local/v7-plated.png' });
   await p.locator(".cu-serve.show").tap();
   await step(4);
@@ -292,7 +292,7 @@ async function settle(){
   await p.screenshot({ path: ".local/v5-ui-food-reaches-mouth.png" });
   await step(1.3);
   assert.equal(await p.evaluate(() => window.__game.home.eaten), 1);
-  await step(7);
+  for (let i = 0; i < 40 && (await p.evaluate(()=>window.__game.home.made)) < 1; i++) await step(.5);
   assert.equal(await p.evaluate(()=>window.__game.home.made),1);
   console.log(
     "PASS food is carried by the visible hand before a bite is taken",
@@ -333,23 +333,13 @@ async function settle(){
   await advanceUntil(".handwork.show");
   await d.parts();
   await advanceUntil(".drawing-paper.show");
-  await d.stroke(
-    await d.mapSVG(".paper-canvas", [
-      [75, 145],
-      [120, 90],
-      [170, 150],
-      [75, 145],
-    ]),
-    70,
-  );
-  await d.stroke(
-    await d.mapSVG(".paper-canvas", [
-      [105, 160],
-      [125, 180],
-      [145, 160],
-    ]),
-    70,
-  );
+  // go over the first two waves of the outline, then leave the paper unfinished
+  for (let k = 0; k < 2; k++) {
+    const dd = await p.locator(".drawing-paper.show .trace-now").getAttribute("d");
+    const raw = dd.replace(/^M/, "").split("L").map((q) => q.trim().split(/\s+/).map(Number));
+    await d.stroke(await d.mapSVG(".paper-canvas", raw.map(([x, y], i) => [x + Math.sin(i) * 2, y + 2])), 15);
+    await step(0.2);
+  }
   const draft = await p.locator(".paper-ink").getAttribute("d");
   await p.reload();
   await step(0.5);
@@ -360,13 +350,13 @@ async function settle(){
     draft,
     "reopening the task must restore the exact unfinished drawing",
   );
-  await p.locator("[data-action=done]").tap();
+  await d.paperDraw();
   await settle();
   assert.equal(
     await p.evaluate(() => window.__game.story._dbg.q.project),
     "tea",
   );
-  assert.equal(await p.locator("[data-awning-art] path").count(), 2);
+  assert.equal(await p.locator("[data-awning-art] path").count(), 3, "three seigaiha waves on the cloth");
   await p.screenshot({ path: ".local/v5-ui-tea-shelter.png" });
   console.log(
     "PASS alternate tea shelter, cancellation/reload/resume, full multi-stroke drawing",

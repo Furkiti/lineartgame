@@ -7,7 +7,7 @@
 //   4 · plate them      — drag each piece from the board onto the geta
 import { f, pt, type Vec } from '../lib/ink.ts';
 import { plateGeometry, freePlateSlot, type PlateDesign } from './plating.ts';
-import { LOOK, type Topping } from './pantry.ts';
+import { LOOK, PIECES, type Topping } from './pantry.ts';
 import { rgb, hex, mix } from '../village/kit.ts';
 import { sfx, haptic, clamp01, lerp, easeOut, easeInOut, backOut, elasticOut, approach } from './fx.ts';
 
@@ -36,10 +36,12 @@ const ST = {
   tub: [20, 110, 230, 290], board: [218, 118, 436, 286], plate: [222, 120, 640, 280], all: [10, 60, 640, 300],
 } as const;
 const TUB: Vec = [120, 190];
-const BLOCK = { x0: 346, x1: 418, y0: 168, y1: 222, slice: 15 };
-const MOUND: Vec[] = [[262, 236], [300, 238], [338, 236]];
-const PILE: Vec[] = [[300, 192], [318, 188], [336, 192]]; // pivot of each fallen slice (it lies to the left of it)
-const SLOT: Vec[] = [[492, 199], [534, 199], [576, 199]];
+const N = PIECES; // six pieces: a full geta
+const BLOCK = { x0: 346, x1: 418, y0: 168, y1: 222, slice: 12 };
+// two rows of rice on the board, the back row first
+const MOUND: Vec[] = [[262, 200], [316, 198], [370, 200], [282, 238], [336, 240], [390, 238]];
+const PILE: Vec[] = [[292, 186], [302, 182], [312, 186], [322, 182], [332, 186], [342, 182]]; // pivot of each fallen slice (it lies to the left of it)
+const SLOT: Vec[] = [[492, 199], [534, 199], [576, 199], [492, 211], [534, 211], [576, 211]];
 
 export function createCloseup(card: HTMLElement, { onStep, onDone, onExit, onDesign }: { onDesign?: (design: PlateDesign) => void; onStep: (n: number) => void; onDone: () => void; onExit: () => void }) {
   const svg = mk('svg', { class: 'closeup' }) as SVGSVGElement;
@@ -108,16 +110,16 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit, onDes
   const blockFat = ink(blockG, '', 2.2, { stroke: '#fff3e6', 'clip-path': `url(#${clipId})`, 'data-stripe': 1 });
   const incision = ink(blockG, '', 1, { stroke: '#ab4c3b', opacity: 0 });
   const cutLine = mk('path', { fill: 'none', stroke: INK, 'stroke-width': 1.4, 'stroke-dasharray': '5 4', opacity: 0 }, blockG);
-  const slices = [0, 1, 2].map((i) => {
+  const slices = Array.from({ length: N }, (_, i) => {
     const g = mk('g', { opacity: 0 }, world);
     const body = fill(g, `M0 0 L${BLOCK.slice} 0 L${BLOCK.slice} ${BLOCK.y1 - BLOCK.y0} L0 ${BLOCK.y1 - BLOCK.y0}Z`, rgb(C.salmon), 1.5);
     ink(g, `M2 10 L${BLOCK.slice - 2} 4 M2 24 L${BLOCK.slice - 2} 18 M2 38 L${BLOCK.slice - 2} 32`, 1.6, { stroke: '#fff3e6', 'data-stripe': 1 });
-    return { g, body, t: -1 };
+    void i; return { g, body, t: -1 };
   });
 
   // rice lumps that become nigiri, and the slices that drape onto them
   const handsBack = mk('g', {}, world);
-  const nigiri = [0, 1, 2].map((i) => {
+  const nigiri = Array.from({ length: N }, (_, i) => {
     const g = mk('g', { opacity: 0 }, world);
     const shadow = mk('ellipse', { rx: 20, ry: 4, cy: 2, fill: INK, opacity: 0.12 }, g);
     const body = fill(g, '', PAPER, 1.6);
@@ -270,7 +272,7 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit, onDes
     nigiri.forEach(n => { if (n.slot >= 0) n.plated = 0; });
   }
   serve.addEventListener('click', () => {
-    if (!open || plated < 3 || doneT >= 0) return;
+    if (!open || plated < N || doneT >= 0) return;
     fingerDown = false; drag = null; doneT = 0; serve.classList.remove('show');
     const p = geometry.plate; frameTo([p.x-18,p.y-45,p.x+p.w+18,p.y+p.h+30]); onDesign?.({ pattern: 'row', garnish: true });
   });
@@ -283,7 +285,7 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit, onDes
     e.preventDefault(); svg.setPointerCapture(e.pointerId);
     const p = toWorld(e); finger = p; pressStart = p; fingerDown = true; lastPt = p; lastMoveT = now; idle = 0; ghost = null;
     if (step === 0) lastAng = Math.atan2((p[1] - TUB[1]) / 0.42, p[0] - TUB[0]);
-    if (step === 1 && cuts < 3) { cutting = true; cutStartY = p[1] - cutDepth * 78; cutVel = 0; }
+    if (step === 1 && cuts < N) { cutting = true; cutStartY = p[1] - cutDepth * 78; cutVel = 0; }
     if (step === 2 && holdI < 0) {
       const i = nigiri.findIndex(n => n.shape < 1);
       if (i >= 0) { holdI = i; holdT = 0; nigiri[i].shape = Math.min(1, nigiri[i].shape); if (nigiri[i].shape >= 1) { nigiri[i].drape = 0; holdI = -1; sfx.chime(); } }
@@ -352,7 +354,7 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit, onDes
     get _cutDepth() { return cutDepth; },
     get _shapes() { return nigiri.map(n => n.shape); },
     snapshot() { return { batchKey, stir, cuts, cutDepth, shapes: nigiri.map(n => n.shape), slots: nigiri.map(n => n.slot), pattern: 'row' }; },
-    restore(s: any) { if (!s || typeof s.batchKey !== 'string') return; batchKey = s.batchKey; stir = Math.max(0, +s.stir || 0); cuts = Math.max(0, Math.min(3, +s.cuts || 0)); cutDepth = clamp01(+s.cutDepth || 0); nigiri.forEach((n,i) => { n.shape = clamp01(+s.shapes?.[i] || 0); n.slot = Number.isInteger(s.slots?.[i]) && s.slots[i] >= 0 && s.slots[i] < 3 ? s.slots[i] : -1; }); },
+    restore(s: any) { if (!s || typeof s.batchKey !== 'string') return; batchKey = s.batchKey; stir = Math.max(0, +s.stir || 0); cuts = Math.max(0, Math.min(N, +s.cuts || 0)); cutDepth = clamp01(+s.cutDepth || 0); nigiri.forEach((n,i) => { n.shape = clamp01(+s.shapes?.[i] || 0); n.slot = Number.isInteger(s.slots?.[i]) && s.slots[i] >= 0 && s.slots[i] < N ? s.slots[i] : -1; }); },
     get _step() { return step; },
     /** open at a given recipe step (0…3) */
     open(from: number, key = '') {
@@ -364,7 +366,7 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit, onDes
       svg.classList.add('show'); back.classList.add('show'); tip.classList.remove('show');
       // restore the board to match the step
       stir = from > 0 ? 20 : stir; clump = 0; advancing = false;
-      cuts = from > 1 ? 3 : from === 1 ? cuts : 0;
+      cuts = from > 1 ? N : from === 1 ? cuts : 0;
       nigiri.forEach((n, i) => { n.shape = from > 2 ? 1 : n.shape; n.drape = from > 2 || n.shape >= 1 ? 1 : -1; n.slot = from === 3 ? n.slot : -1; n.plated = n.slot >= 0 ? 1 : -1; n.pos = [...MOUND[i]] as Vec; });
       if (from < 2) nigiri.forEach((n) => { n.shape = 0; n.drape = -1; });
       plated = nigiri.filter(n => n.slot >= 0).length; slices.forEach((s, i) => { s.t = cuts > i ? 9 : -1; });
@@ -451,23 +453,23 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit, onDes
       blockFat.setAttribute('d', fat.join(' '));
       const cx = x0 + BLOCK.slice;
       cutLine.setAttribute('d', `M${f(cx)} ${BLOCK.y0 - 6} L${f(cx)} ${BLOCK.y1 + 6}`);
-      cutLine.setAttribute('opacity', f(step === 1 && cuts < 3 ? 0.55 + 0.25 * Math.sin(t * 4) : 0));
+      cutLine.setAttribute('opacity', f(step === 1 && cuts < N ? 0.55 + 0.25 * Math.sin(t * 4) : 0));
       cutLine.setAttribute('stroke-dashoffset', f(-t * 12));
       knife.setAttribute('opacity', f(step === 1 ? 1 : 0));
       if (step === 1) {
-        if (fingerDown && cutting && cuts < 3) {
-          cutDepth = Math.min(1, cutDepth + dt * .58); cutSoundT += dt;
+        if (fingerDown && cutting && cuts < N) {
+          cutDepth = Math.min(1, cutDepth + dt * .95); cutSoundT += dt;
           if (cutSoundT > .19) { cutSoundT = 0; sfx.scrape(cutDepth); }
         }
         knifeY = approach(knifeY, cutDepth * 65 + (fingerDown ? 0 : -10), 13, dt);
         incision.setAttribute('d', `M${f(cx)} ${BLOCK.y0}v${f(cutDepth * (BLOCK.y1-BLOCK.y0))}`); incision.setAttribute('opacity', f(cutDepth*.75));
         bladeShine.setAttribute('opacity', f(fingerDown ? .4+Math.sin(t*12)*.15 : .12));
         blockG.setAttribute('transform', `translate(0 ${f(fingerDown ? cutDepth*.8 : 0)})`);
-        if (cuts < 3 && cutDepth >= 1) {
+        if (cuts < N && cutDepth >= 1) {
           burstAt = [cx, BLOCK.y1]; cutBurst = 0;
           slices[cuts].t = 0; cuts++; cutDepth = knifeY = 0; cutting = false; fingerDown = false; sfx.slice(); haptic(13);
-          onStep(cuts >= 3 ? 2 : 1);
-          if (cuts >= 3) after(.8, () => { if (open && step === 1) { sfx.success(); setStep(2); } });
+          onStep(cuts >= N ? 2 : 1);
+          if (cuts >= N) after(.8, () => { if (open && step === 1) { sfx.success(); setStep(2); } });
         }
         // the blade hangs over the dashed line and follows your finger down through the fish
         const ky = BLOCK.y0 - 66 + Math.min(knifeY, BLOCK.y1 - BLOCK.y0 + 8) + (cutting ? 0 : Math.sin(t * 2.4) * 1.5);
@@ -495,7 +497,7 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit, onDes
         holdT += dt; pressPh += dt * 5.5;
         const n = nigiri[holdI];
         const was = n.shape;
-        n.shape = Math.min(1, n.shape + dt / 1.15);
+        n.shape = Math.min(1, n.shape + dt / .72);
         if (Math.floor(pressPh / Math.PI) !== Math.floor((pressPh - dt * 5.5) / Math.PI)) { sfx.press(); haptic(5); }
         if (was < 1 && n.shape >= 1) { n.drape = 0; holdI = -1; sfx.chime(); haptic(12); }
       }
@@ -548,7 +550,9 @@ export function createCloseup(card: HTMLElement, { onStep, onDone, onExit, onDes
       }
       // ---------------- 4 · plating
       slotGuides.forEach((g, i) => g.setAttribute('opacity', f(step === 3 && !nigiri.some(n => n.slot === i) ? .32 + .16*Math.sin(t*3) : 0)));
-      serve.classList.toggle('show', step === 3 && plated >= 3 && doneT < 0);
+      serve.classList.toggle('show', step === 3 && plated >= N && doneT < 0);
+      // a full geta in two rows: the back row is drawn behind the front one
+      if (step === 3) { const order = [...nigiri].sort((a, b) => a.pos[1] - b.pos[1] || (a === nigiri[drag?.i ?? -1] ? 1 : 0)); if (drag) { order.splice(order.indexOf(nigiri[drag.i]), 1); order.push(nigiri[drag.i]); } let prev: Element | null = null; for (const n of order) { if (prev && prev.nextSibling !== n.g) world.insertBefore(n.g, prev.nextSibling); prev = n.g; } }
       if (doneT >= 0) {
         doneT += dt;
         garnish.setAttribute('opacity', f(easeOut(doneT / 0.4)));

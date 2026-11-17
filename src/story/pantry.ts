@@ -26,8 +26,9 @@ export const RECIPES: { id: Topping; name: string; needs: Partial<Record<Item, n
   { id: 'tamago', name: 'Tamago nigiri', needs: { yumurta: 2 } },
   { id: 'kyuri', name: 'Salatalıklı nigiri', needs: { 'salatalık': 1 } },
 ];
-/** a batch is three pieces; the dish shelf holds two batches */
-export const PIECES = 3, DISH_SPOTS = 6, BUNDLE = 4;
+/** a batch is six pieces (a full geta); the dish shelf holds two lacquer boxes of six */
+export const PIECES = 6, DISH_BOXES = 2, BUNDLE = 4;
+export type Box = Topping[];
 export const START: Pantry = { somon: 1, yumurta: 2, 'salatalık': 0, mandalina: 0 };
 
 export function normalize(p: Partial<Record<string, unknown>> | undefined | null): Pantry {
@@ -35,7 +36,14 @@ export function normalize(p: Partial<Record<string, unknown>> | undefined | null
   if (p && typeof p === 'object') for (const id of ITEM_IDS) { const n = Number(p[id]); if (Number.isFinite(n)) out[id] = Math.max(0, Math.min(ITEMS[id].spots, Math.floor(n))); }
   return out;
 }
-export const normalizeDishes = (d: unknown): Topping[] => Array.isArray(d) ? d.filter((x): x is Topping => RECIPES.some(r => r.id === x)).slice(0, DISH_SPOTS) : [];
+const isTopping = (x: unknown): x is Topping => RECIPES.some(r => r.id === x);
+/** boxes of dishes; an older save kept a flat list of pieces: pack those into boxes */
+export function normalizeDishes(d: unknown): Box[] {
+  if (!Array.isArray(d)) return [];
+  const boxes: Box[] = d.some(Array.isArray) ? d.filter(Array.isArray).map(b => b.filter(isTopping).slice(0, PIECES)) : [];
+  if (!d.some(Array.isArray)) { const flat = d.filter(isTopping); for (let i = 0; i < flat.length; i += PIECES) boxes.push(flat.slice(i, i + PIECES)); }
+  return boxes.filter(b => b.length).slice(0, DISH_BOXES);
+}
 export const normalizeBasket = (b: unknown): Item[] => Array.isArray(b) ? b.filter((x): x is Item => ITEM_IDS.includes(x as Item)).slice(0, BUNDLE) : [];
 
 export const recipe = (id: Topping) => RECIPES.find(r => r.id === id)!;
@@ -59,9 +67,9 @@ export function store(p: Pantry, items: Item[]): { pantry: Pantry; left: Item[] 
 /** things with no place filled: the shopping list writes itself from the dashed outlines */
 export const missing = (p: Pantry) => ITEM_IDS.filter(id => p[id] === 0);
 /** can tonight's dinner happen from what is at home (cooked or put away)? */
-export const canFeed = (p: Pantry, dishes: Topping[]) => dishes.length > 0 || makeable(p).length > 0;
+export const canFeed = (p: Pantry, dishes: Box[]) => dishes.some(b => b.length > 0) || makeable(p).length > 0;
 /** the safety net: a morning with nothing to cook and nothing put away finds eggs at the door */
-export function morningGift(p: Pantry, dishes: Topping[]): { pantry: Pantry; gift: boolean } {
+export function morningGift(p: Pantry, dishes: Box[]): { pantry: Pantry; gift: boolean } {
   if (canFeed(p, dishes)) return { pantry: p, gift: false };
   return { pantry: { ...p, yumurta: Math.min(ITEMS.yumurta.spots, p.yumurta + 2) }, gift: true };
 }

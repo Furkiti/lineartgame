@@ -145,7 +145,7 @@ function enter() {
   inside = true;
   [skyL, scene, glow, strokeL].forEach((n) => (n.style.display = 'none'));
   home.root.style.display = '';
-  home.onEnter();
+  home.onEnter(player);
   home.actors.appendChild(player.g);
   player.x = home.spawn.x; player.y = home.spawn.y; player.setHeading(Math.PI / 2);
   player.bounds = { ...home.bounds, y0: Y_MIN }; camSnap = true;
@@ -153,6 +153,7 @@ function enter() {
 }
 function exit() {
   inside = false;
+  home.leave(player);
   home.doorTarget = 0; home.doorContact = false;
   player.g.style.opacity = '1';
   [skyL, scene, glow, strokeL].forEach((n) => (n.style.display = ''));
@@ -396,7 +397,8 @@ run((t, dt) => {
   if (STORY && !inside && !inFair && !inMarket) {
     const gate=player.y<Y_MIN-.5&&Math.abs(player.x-MARKET_GATE)<30?MARKET_GATE:Math.abs(player.x-MARKET_GATE)<14?MARKET_GATE:ALLEY.x;
     const deep=player.y<Y_MIN-.5,inMouth=Math.abs(player.x-gate)<ALLEY.mouth;
-    player.bounds=deep?{x0:gate-7,x1:gate+7,y0:ALLEY.deep}:{...STREET.bounds,y0:inMouth?ALLEY.deep:Y_MIN};
+    const open=gate===MARKET_GATE||(story?.alleyOpen??true);
+    player.bounds=deep?{x0:gate-7,x1:gate+7,y0:ALLEY.deep}:{...STREET.bounds,y0:inMouth&&open?ALLEY.deep:Y_MIN};
     alleyDepth=clamp((Y_MIN-player.y)/(Y_MIN-ALLEY.deep),0,1);
     player.scale=1-alleyDepth*.3;
     if(player.y<ALLEY.enter&&j.y<-.2&&!pending&&!story?.freeze){

@@ -155,6 +155,27 @@ async function launchGame({
   }
   async function paperDraw() {
     await page.waitForSelector(".drawing-paper.show");
+    // an outline to trace: go over each stroke, a little off the line like a real hand
+    if (await page.locator(".drawing-paper.show.tracing").count()) {
+      for (let k = 0; k < 12; k++) {
+        const d = await page.locator(".drawing-paper.show .trace-now").getAttribute("d");
+        if (!d) break;
+        const raw = d.replace(/^M/, "").split("L").map((s) => s.trim().split(/\s+/).map(Number));
+        const pts = [];
+        for (let i = 0; i < raw.length - 1; i++) for (let u = 0; u < 1; u += 0.25) pts.push([raw[i][0] + (raw[i + 1][0] - raw[i][0]) * u, raw[i][1] + (raw[i + 1][1] - raw[i][1]) * u]);
+        pts.push(raw[raw.length - 1]);
+        pts.forEach((p, i) => { p[0] += Math.sin(i) * 3; p[1] += Math.cos(i * 1.3) * 3; });
+        await stroke(await mapSVG(".drawing-paper.show .paper-canvas", pts), 12);
+        await page.waitForTimeout(80);
+      }
+      await page.waitForTimeout(300);
+      const box = await page.locator(".drawing-paper.show [data-action=done]").boundingBox();
+      const c = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [c] });
+      await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+      await page.waitForTimeout(200);
+      return;
+    }
     await stroke(
       await mapSVG(".drawing-paper.show .paper-canvas", [
         [75, 145],
@@ -247,7 +268,24 @@ async function launchGame({
       if (shot) await page.screenshot({ path: shot + '-2-mist.png' });
       const zig = []; for (let y = P.IN.y0 + 10; y < P.IN.y1; y += 22) { zig.push([P.IN.x0 + 12, y], [P.IN.x1 - 12, y + 11]); }
       await stroke(await at(zig), 20);
-      await until(() => window.__game.story._dbg.icebox.phase === 'main', 'mist wiped');
+      await until(() => ['main', 'box'].includes(window.__game.story._dbg.icebox.phase), 'mist wiped');
+    }
+    // a carried plate: each nigiri into a compartment of the box, seen from above
+    if (await page.evaluate(() => window.__game.story._dbg.icebox.phase === 'box')) {
+      await adv(.8);
+      if (shot) await page.screenshot({ path: shot + '-2-box.png' });
+      const drag = async (from, to) => { const pts = Array.from({ length: 14 }, (_, i) => [from[0] + (to[0] - from[0]) * i / 13, from[1] + (to[1] - from[1]) * i / 13]); await stroke(await at(pts), 25); await adv(.45); };
+      for (let k = 0; k < 8; k++) {
+        const ps = await page.evaluate(() => window.__game.story._dbg.icebox._pieces);
+        const pc = ps.find((x) => x.cell < 0); if (!pc) break;
+        const cell = P.CELLS.findIndex((_, i) => !ps.some((x) => x.cell === i));
+        await drag(pc.pos, P.CELLS[cell]);
+        if (shot && k === 2) await page.screenshot({ path: shot + '-3-filling.png' });
+      }
+      await adv(1.2);
+      if (shot) await page.screenshot({ path: shot + '-4-lid.png' });
+      await until(() => !window.__game.story._dbg.icebox.isOpen, 'closes after the box');
+      return;
     }
     await adv(1);
     const mode = await page.evaluate(() => window.__game.story._dbg.icebox.mode);
@@ -270,7 +308,7 @@ async function launchGame({
         const s = (await things()).find(x => x.kind === 'somon' && x.tied);
         if (s) { await stroke(await at([[s.pos[0] - 30, s.pos[1] - 40], [s.pos[0] - 10, s.pos[1] - 12], [s.pos[0] + 10, s.pos[1] + 12], [s.pos[0] + 30, s.pos[1] + 40]]), 30); await adv(1); }
       }
-      for (let k = 0; k < 3; k++) {
+      for (let k = 0; k < (kind === 'dish' ? 1 : 3); k++) {
         if (!(await page.evaluate(() => window.__game.story._dbg.icebox.phase === 'main'))) break;
         const t = (await things()).find(x => x.kind === kind && x.spot >= 0 && !x.tied); if (!t) break;
         await drag(t.pos, [P.TRAY[0], P.TRAY[1] - 12]);
@@ -302,10 +340,43 @@ async function launchGame({
   async function ready() {
     await page.waitForFunction(() => window.__game.story.canSave);
   }
+  const advance = (s) => debug ? page.evaluate((s) => window.__step(s), s) : page.waitForTimeout(s * 1000);
   async function home() {
     if (await page.evaluate(() => window.__game.inside)) return;
     await walkTo(457, 365);
+    // the first time home, the stepping stones are only pencil: press them in on the beat
+    if (!(await page.evaluate(() => window.__game.story._dbg.alley.built))) {
+      for (let i = 0; i < 160 && !(await page.evaluate(() => window.__game.story._dbg.alley.playing)); i++) { await drive(0, (await page.evaluate(() => window.__game.story.mode)) === 'walk' ? -1 : 0); await advance(.15); }
+      await drive(0, 0);
+      await alley();
+    }
     await walkTo(457, 327, { inside: true });
+  }
+  /** touch as each ring settles on its stone (late = a crooked stone, but always a stone) */
+  async function alley({ shot = '' } = {}) {
+    for (let i = 0; i < 120 && !(await page.evaluate(() => window.__game.story._dbg.alley.playing)); i++) await advance(.25);
+    for (let k = 0; k < 5; k++) {
+      for (let i = 0; i < 400; i++) { const ph = await page.evaluate(() => window.__game.story._dbg.alley.phase); if (ph > .9 && ph < .985) break; await advance(debug ? .02 : .01); }
+      await page.touchscreen.tap(195, 300);
+      await advance(.15);
+      if (shot && k === 2) await page.screenshot({ path: shot });
+    }
+    for (let i = 0; i < 120 && (await page.evaluate(() => window.__game.story.mode)) !== 'walk'; i++) await advance(.25);
+  }
+  /** Hana's 茶: go over each faint stroke from its red dot */
+  async function shodo() {
+    await page.waitForSelector(".sh-order.show");
+    await page.locator(".sh-order button").tap();
+    await advance(.6);
+    for (let k = 0; k < 14; k++) {
+      const s = await page.evaluate(() => window.__game.story._dbg.shodo._stroke);
+      if (!s) break;
+      const pts = [];
+      for (let j = 0; j < s.length - 1; j++) for (let u = 0; u < 1; u += .125) pts.push([s[j][0] + (s[j + 1][0] - s[j][0]) * u + Math.sin(j + u) * 1.5, s[j][1] + (s[j + 1][1] - s[j][1]) * u]);
+      pts.push(s[s.length - 1]);
+      await stroke(await page.evaluate((pts) => pts.map((pt) => window.__game.story._dbg.shodo._client(pt)), pts), 18);
+      await advance(.25);
+    }
   }
   async function outside() {
     if (!(await page.evaluate(() => window.__game.inside))) return;
@@ -363,6 +434,8 @@ async function launchGame({
     walkTo,
     mapSVG,
     paperDraw,
+    alley,
+    shodo,
     parts,
     action,
     icebox,

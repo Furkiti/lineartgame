@@ -21,19 +21,19 @@ const q = () => d.page.evaluate(() => __game.story._dbg.q);
   console.log('PASS two eggs from the icebox become tamago on the board and in the close-up');
 
   // a plate you carry goes onto the dish shelf, piece by piece
-  p = await stage(seed({}, { step: 5, prep: 2, topping: 'kyuri', pieces: ['kyuri', 'kyuri', 'kyuri'] }));
+  p = await stage(seed({}, { step: 5, prep: 2, topping: 'kyuri', pieces: ['kyuri', 'kyuri', 'kyuri', 'kyuri', 'kyuri', 'kyuri'] }));
   await d.icebox({ shot: '.local/v9-store-plate' });
-  assert.deepEqual((await q()).dishes, ['kyuri', 'kyuri', 'kyuri']);
+  assert.deepEqual((await q()).dishes, [['kyuri', 'kyuri', 'kyuri', 'kyuri', 'kyuri', 'kyuri']], 'six pieces packed into one box');
   assert.equal(await p.evaluate(() => __game.home.step), 0, 'the kitchen is free again');
   assert.equal(await p.evaluate(() => __game.home.made), 1, 'a batch put away counts as made, so the next one starts fresh');
-  console.log('PASS a carried plate is put away on the dish shelf');
+  console.log('PASS a carried plate of six is packed into a lacquer box, seen from above, and shelved');
 
   // later it comes out again and is carried like a fresh plate
   await step(1);
   await d.icebox({ take: 'dish', shot: '.local/v9-serve' });
   assert.deepEqual((await q()).dishes, []);
   assert.equal(await p.evaluate(() => __game.home.step), 5);
-  assert.deepEqual(await p.evaluate(() => __game.home.plate), ['kyuri', 'kyuri', 'kyuri']);
+  assert.deepEqual(await p.evaluate(() => __game.home.plate), ['kyuri', 'kyuri', 'kyuri', 'kyuri', 'kyuri', 'kyuri']);
   console.log('PASS a dish put away comes out as a plate to serve');
 
   // the market: a ring around cucumbers and eggs, the bundle tied, carried home, put away

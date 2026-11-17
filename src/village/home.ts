@@ -6,7 +6,8 @@
 // so it shares the camera, the ink colour and the paper colour of the hour.
 import { el, pen, shape, blot, f, pt, PAPER, type Vec } from '../lib/ink.ts';
 import { closestSeat, mealTurn, biteMotion, SEATS } from '../story/dining.ts';
-import { LOOK, type Topping } from '../story/pantry.ts';
+import { LOOK, PIECES, type Topping } from '../story/pantry.ts';
+import { sfx, haptic } from '../story/fx.ts';
 import { W, BASE, SP, lerp, clamp, smooth, ease, easeOut, oval, rgb, hex, mix } from './kit.ts';
 
 export const IX = 1300;          // where the interior starts in scene x
@@ -44,10 +45,12 @@ const SPOT = {
 };
 const DISH_HOME: Vec = [291, 315]; // the cutting board's top, middle of the three pieces
 const TABLE_TOP: Vec = [186, 335.4];
-const SLOT_X = [-7.5, 0, 7.5];
+// a full geta: six nigiri in two rows (the back row a little higher)
+const SLOT_P: Vec[] = [[-8.4, -1.9], [0, -1.9], [8.4, -1.9], [-8.4, .9], [0, .9], [8.4, .9]];
+const SLOT_X = SLOT_P.map(p => p[0]);
 const TUB: Vec = [32, -6];         // rice tub, relative to the dish
 const PILE: Vec = [14, -0.4];        // where cut slices land
-const BLOCK = { x1: 299, y0: 309, y1: 315, w0: 16, cut: 2.2 };
+const BLOCK = { x1: 299, y0: 309, y1: 315, w0: 16, cut: 16 / PIECES * .9 };
 
 type Player = {
   x: number; y: number; heading: number; hands: Vec; rightHand: Vec; mouth: Vec; carryBundle: boolean;
@@ -162,9 +165,13 @@ export function buildHome(svg: SVGSVGElement) {
     return panel;
   });
   C_(house, rect(13, 278, 67, 282), rgb(COL.wood), SP * 0.7);
-  // a short noren inside the door
-  C_(house, `M18 283 L39 283 L38.6 296 L18.4 296.4Z M41 283 L62 283 L61.6 296.4 L41.4 296Z`, rgb(COL.indigo), SP * 0.6);
+  // a short noren inside the door: it sways when the door moves or you pass under it
+  const noren = [0, 1].map(i => el('g', {}, house));
+  C_(noren[0], `M18 283 L39 283 L38.6 296 L18.4 296.4Z`, rgb(COL.indigo), SP * 0.6);
+  C_(noren[1], `M41 283 L62 283 L61.6 296.4 L41.4 296Z`, rgb(COL.indigo), SP * 0.6);
   text(house, 40, 289.6, '旅', 7, { fill: '#f3ead8' });
+  // daylight from the open door, laid on the earth floor
+  const spill = el('path', { d: `M16 ${BASE} L64 ${BASE} L84 ${BASE + 16} L-4 ${BASE + 16}Z`, fill: '#fff4d6', opacity: 0, 'pointer-events': 'none' }, house);
   // sandals on the earth floor
   B_(house, 'M30 356 q3 -1.6 7 0 q0.8 1.6 -1 2 l-5 0 q-1.6 -0.4 -1 -2Z M39 357 q3 -1.6 7 0 q0.8 1.6 -1 2 l-5 0 q-1.6 -0.4 -1 -2Z');
   // umbrella in a stand
@@ -310,10 +317,11 @@ export function buildHome(svg: SVGSVGElement) {
   const dish = el('g', {}, props);
   const geta = el('g', { opacity: 0 }, dish);
   const getaTop = C_(geta, 'M-14 -3.4 L14 -3.4 L14 -1.8 L-14 -1.8Z', rgb(COL.wood), SP * 0.6);
+  getaTop.setAttribute('d', 'M-14.4 -4.6 L14.4 -4.6 L14.4 -1.6 L-14.4 -1.6Z'); // deep enough for two rows
   const plateLeaf=C_(geta,'M11 -4q-3-6-7-4q1 5 7 4Z','#8b9c66',SP*.35);
   const plateGinger=C_(geta,'M10 -3q-3-3-1-4q4-1 4 2q-1 2-3 2Z','#dfada0',SP*.3);
   P_(geta, 'M-10.6 -1.8 L-10.6 0 M10.6 -1.8 L10.6 0', SP * 1.4);
-  const pieces = [0, 1, 2].map((i) => {
+  const pieces = Array.from({ length: PIECES }, (_, i) => {
     const g = el('g', { opacity: 0, 'data-food-piece': i }, dish);
     const rice = el('g', {}, g);
     C_(rice, 'M-3.4 0 Q-3.7 -3.3 0 -3.5 Q3.7 -3.3 3.4 0Z', PAPER, SP * 0.55);
@@ -350,9 +358,10 @@ export function buildHome(svg: SVGSVGElement) {
   const doorHands = inner();
   const handArms = el('path', { fill: 'none', stroke: '#34507a', 'stroke-width': 2.8, 'stroke-linecap': 'round' }, doorHands);
   const handDots = [0, 1].map(() => el('circle', { cy: 322, r: 1.4, fill: '#f7eddb', stroke: 'currentColor', 'stroke-width': .45 }, doorHands));
-  let doorOpen = 0;
+  let lastPl: Vec = [0, 0];
+  let doorOpen = 0, doorPrev = 0, slideCd = 0, norenSwing = 0, norenV = 0, wasContact = false, doorEdge: 'shut' | 'open' | 'mid' = 'shut';
   let bagFrom: Vec = [44, 325], bagAt: Vec = [72, 296];
-  let mealOrder=[0,1,2];
+  let mealOrder = pieces.map((_, i) => i), count = PIECES; // pieces on this plate
   let mealActive = false, sharedMeal = false, mealSeat: 0 | 1 = 0, seatedAfterMeal = false, biteGap = 0, sleepT = -1;
   let step = 0, anim = -1, eaten = 0, eatT = -1, made = 0, resetT = -1, futonOp = 0;
   // prep: the fish is 0 in the icebox · 1 in your hands · 2 on the board. iceT / placeT / bagT play those moves
@@ -376,37 +385,39 @@ export function buildHome(svg: SVGSVGElement) {
     plateGarnish: false,
     get seat() { return mealSeat; },
     get mealActive() { return mealActive; },
-    get mealTurn() { return mealTurn(eaten, sharedMeal); },
+    get mealTurn() { return mealTurn(eaten, sharedMeal, count); },
     get sitting() { return sleepT >= 0 ? 1 - smooth(.3, 1.2, sleepT) : mealActive || seatedAfterMeal ? 1 : 0; },
     get recline() { return sleepT < 0 ? 0 : smooth(.45, 1.8, sleepT); },
     beginSleep() { sleepT = 0; seatedAfterMeal = false; },
     get canExit() { return !mealActive && sleepT < 0 && iceT < 0 && placeT < 0 && !api.carrying && prep !== 1; },
-    get readyToLeave() { return bagT < 0 && !bagHung; },
+    get readyToLeave() { return true; },
+    /** going out: the bundle comes off its peg onto your back (the door hides the moment) */
+    leave(pl: Player) { if (bagHung) { bagHung = false; pl.carryBundle = true; } },
     setPlateDesign(layout: 'row' | 'triangle', garnish = false) { api.plateLayout = layout; api.plateGarnish = garnish; },
     decorateTable(paths: string[]) { tableArt.innerHTML = `<path d="M-22 -3H22L24 3H-24Z" fill="#fff7df" stroke="currentColor" stroke-width=".4"/>${paths.map(d => `<path d="${d}" transform="scale(1 .3)" fill="none" stroke="#b65042" stroke-width=".7"/>`).join('')}`; },
     doorTarget: 0, doorContact: false, walkExit: false,
     get doorOpen() { return doorOpen; },
-    onEnter() { doorOpen = 0; api.doorTarget = 0; api.exitIntent = false; },
+    onEnter(pl?: Player) { doorOpen = doorPrev = .9; doorEdge = 'mid'; norenV = 2.4; api.doorTarget = 0; api.exitIntent = false; if (pl?.carryBundle) { bagHung = true; pl.carryBundle = false; } },
     /** the fish came out of the icebox close-up: it rises into your hands and the door shuts */
     fromIcebox(t: Topping = 'somon') { if (prep === 0) { setTopping(t); iceT = 0.8; } },
     get topping() { return topping; },
     /** the pieces on the plate you carry (not yet eaten) */
-    get plate(): Topping[] { return step === 5 ? pieces.filter(pc => pc.eaten < 1).map(pc => (pc.g.getAttribute('data-topping') as Topping) || topping) : []; },
+    get plate(): Topping[] { return step === 5 ? pieces.filter((pc, i) => i < count && pc.eaten < 1).map(pc => (pc.g.getAttribute('data-topping') as Topping) || topping) : []; },
+    get count() { return count; },
     setTopping,
     /** a plate of dishes you put away comes out again: carried, as if just made */
     takeDish(tops: Topping[]) {
       if (step !== 0 || prep !== 0 || !tops.length) return;
-      const n = Math.min(3, tops.length), skip = 3 - n;
-      mealOrder = [0, 1, 2]; eaten = skip; anim = -1;
-      pieces.forEach((pc, i) => { pc.eaten = i < skip ? 1 : 0; pc.g.setAttribute('transform', ''); if (i >= skip) paintPiece(i, tops[i - skip]); });
+      count = Math.min(PIECES, tops.length); eaten = 0; anim = -1;
+      pieces.forEach((pc, i) => { pc.eaten = 0; pc.g.setAttribute('transform', ''); if (i < count) paintPiece(i, tops[i]); });
       step = 5; top.appendChild(dish);
     },
     /** the plate you carried goes into the icebox: the kitchen is ready for something else */
     storeDish(): Topping[] {
       if (step !== 5) return [];
-      const kept = pieces.filter(pc => pc.eaten < 1).map(pc => (pc.g.getAttribute('data-topping') as Topping) || topping);
+      const kept = api.plate;
       // a finished batch: the next one at the board starts fresh
-      step = 0; prep = 0; eaten = 0; anim = -1; made++; iceFish.setAttribute('opacity', '1');
+      step = 0; prep = 0; eaten = 0; anim = -1; made++; count = PIECES; iceFish.setAttribute('opacity', '1');
       pieces.forEach((pc) => { pc.eaten = 0; pc.g.setAttribute('transform', ''); });
       props.appendChild(dish);
       return kept;
@@ -433,18 +444,18 @@ export function buildHome(svg: SVGSVGElement) {
     canSleep: false,
     canCook: true,
     canEat: true,
-    snapshot() { return { topping, pieces: pieces.map(pc => pc.g.getAttribute('data-topping') || topping), step, prep, eaten, made, bagHung, catHome: api.catHome, windowOpen: api.windowOpen, plateLayout: api.plateLayout, plateGarnish: api.plateGarnish }; },
+    snapshot() { return { topping, count, pieces: pieces.map(pc => pc.g.getAttribute('data-topping') || topping), step, prep, eaten, made, bagHung, catHome: api.catHome, windowOpen: api.windowOpen, plateLayout: api.plateLayout, plateGarnish: api.plateGarnish }; },
     restore(s: Record<string, any>) {
       step = Math.max(0, Math.min(6, Number(s.step) || 0)); prep = Math.max(0, Math.min(2, Number(s.prep) || 0));
-      eaten = Math.max(0, Math.min(3, Number(s.eaten) || 0)); made = Number(s.made) || 0; bagHung = !!s.bagHung; api.catHome = !!s.catHome; api.windowOpen = !!s.windowOpen; api.plateLayout = s.plateLayout === 'triangle' ? 'triangle' : 'row'; api.plateGarnish = !!s.plateGarnish;
+      count = Math.max(1, Math.min(PIECES, Number(s.count) || PIECES)); eaten = Math.max(0, Math.min(count, Number(s.eaten) || 0)); made = Number(s.made) || 0; bagHung = !!s.bagHung; api.catHome = !!s.catHome; api.windowOpen = !!s.windowOpen; api.plateLayout = s.plateLayout === 'triangle' ? 'triangle' : 'row'; api.plateGarnish = !!s.plateGarnish;
       anim = iceT = placeT = bagT = eatT = resetT = -1;
       setTopping(['somon', 'tamago', 'kyuri'].includes(s.topping) ? s.topping : 'somon');
-      if (Array.isArray(s.pieces)) s.pieces.forEach((t: string, i: number) => { if (i < 3 && ['somon', 'tamago', 'kyuri'].includes(t)) paintPiece(i, t as Topping); });
+      if (Array.isArray(s.pieces)) s.pieces.forEach((t: string, i: number) => { if (i < PIECES && ['somon', 'tamago', 'kyuri'].includes(t)) paintPiece(i, t as Topping); });
       pieces.forEach((pc, i) => { pc.eaten = i < eaten ? 1 : 0; });
       (step === 5 ? top : props).appendChild(dish);
       if (step === 0 && prep === 1) prep = 2;
     },
-    newDay() { sleepT = -1; mealActive = seatedAfterMeal = false; api.guestSeat = -1; api.diningGuest = null; api.guestReach = null; api.offeredLast = false; step = 0; prep = 0; eaten = 0; anim = eatT = resetT = iceT = placeT = bagT = -1; api.reach = null; pieces.forEach(pc => { pc.eaten = 0; pc.g.setAttribute('transform', ''); }); },
+    newDay() { sleepT = -1; mealActive = seatedAfterMeal = false; api.guestSeat = -1; api.diningGuest = null; api.guestReach = null; api.offeredLast = false; step = 0; prep = 0; eaten = 0; count = PIECES; anim = eatT = resetT = iceT = placeT = bagT = -1; api.reach = null; pieces.forEach(pc => { pc.eaten = 0; pc.g.setAttribute('transform', ''); }); },
     get step() { return step; },
     get eaten() { return eaten; },
     /** the close-up sets how far the recipe got */
@@ -479,7 +490,7 @@ export function buildHome(svg: SVGSVGElement) {
       if (w === 'futon') return 'sleep';
       if (w === 'cook' && step === 4) { step = 5; top.appendChild(dish); return null; }
       if (w === 'table' && step === 5) { step = 6; props.appendChild(dish); say('itadakimasu', [TABLE_TOP[0], TABLE_TOP[1] - 34]); return null; }
-      if (w === 'table' && step === 6 && api.canEat) { mealSeat = closestSeat(pl.x - IX, api.guestSeat); sharedMeal = api.guestSeat >= 0 && !!api.diningGuest; if(eaten===0)mealOrder=mealSeat===1?[2,0,1]:[0,2,1]; mealActive = true; seatedAfterMeal = true; biteGap = .55; eatT = -1; return null; }
+      if (w === 'table' && step === 6 && api.canEat) { mealSeat = closestSeat(pl.x - IX, api.guestSeat); sharedMeal = api.guestSeat >= 0 && !!api.diningGuest; if (eaten === 0) { const side = mealSeat === 1 ? 1 : -1; mealOrder = pieces.map((_, i) => i).filter(i => i < count).sort((a, b) => (SLOT_P[b][0] - SLOT_P[a][0]) * side || SLOT_P[b][1] - SLOT_P[a][1]); } mealActive = true; seatedAfterMeal = true; biteGap = .55; eatT = -1; return null; }
       return null;
     },
     get busy() { return busy(); },
@@ -519,6 +530,21 @@ export function buildHome(svg: SVGSVGElement) {
       const outside = rgb(mix(P.bot, P.top, 0.35));
       windowPane.setAttribute('fill', rgb(mix(mix(P.bot, P.top, 0.35), COL.warm, lit * 0.25)));
       doorOpen += (api.doorTarget - doorOpen) * Math.min(1, dt * 7);
+      // the door has weight: its rail sounds while it moves, it knocks at either end,
+      // your hands touching it give a small tick, and the noren and the daylight answer it
+      const dv = dt > 0 ? (doorOpen - doorPrev) / dt : 0; doorPrev = doorOpen;
+      slideCd -= dt;
+      if (Math.abs(dv) > .35 && slideCd <= 0) { sfx.slide(Math.min(1, Math.abs(dv) / 4)); slideCd = .075; }
+      if (doorOpen > .93 && doorEdge !== 'open') { if (doorEdge === 'mid') { sfx.knock(); haptic(10); } doorEdge = 'open'; }
+      else if (doorOpen < .04 && doorEdge !== 'shut') { if (doorEdge === 'mid') { sfx.knock(); haptic(6); } doorEdge = 'shut'; }
+      else if (doorOpen > .1 && doorOpen < .85) doorEdge = 'mid';
+      if (api.doorContact && !wasContact) { sfx.tap(); haptic(8); }
+      wasContact = api.doorContact;
+      const under = Math.abs(pl.x - (IX + 40)) < 22 && pl.y < 364 && dt > 0 ? Math.min(1.5, Math.hypot(pl.x - lastPl[0], pl.y - lastPl[1]) / dt / 40) : 0; lastPl = [pl.x, pl.y];
+      norenV += (-norenSwing * 26 - norenV * 3.2 + dv * 9 + under * 6) * dt; norenSwing += norenV * dt;
+      noren.forEach((n, i) => n.setAttribute('transform', `translate(${i ? 41 : 18} 283) skewX(${f(norenSwing * (i ? 7 : 9))}) translate(${i ? -41 : -18} -283)`));
+      spill.setAttribute('opacity', f(doorOpen * .32 * (1 - P.lamp * .5)));
+      spill.setAttribute('fill', rgb(mix(mix(P.bot, P.top, 0.35), [255, 244, 214], .55)));
       doorGap.setAttribute('fill', outside);
       doorPanels.forEach((panel, i) => panel.setAttribute('transform', `translate(${f((i ? 1 : -1) * doorOpen * 25)} 0)`));
       doorway.setAttribute('data-open', f(doorOpen));
@@ -562,21 +588,10 @@ export function buildHome(svg: SVGSVGElement) {
       carryFish.setAttribute('opacity', (prep === 1 || placeT >= 0) && !(iceT >= 0 && iceT < 0.8) ? '1' : '0');
       carryFish.setAttribute('transform', `translate(${f(fishAt[0])} ${f(fishAt[1])})`);
       if (prep === 1) { const behind = Math.sin(pl.heading) < -0.3; const want = behind ? props : top; if (carryFish.parentNode !== want) want.appendChild(carryFish); }
-      // The same bundle follows a soft arc, including reversing if you leave the door.
-      const back: Vec = [pl.x - IX - Math.cos(pl.heading) * 4, pl.y - 31], peg: Vec = [SPOT.peg, 296];
-      const wantsBack = api.exitIntent;
-      if (bagT < 0 && (wantsBack && bagHung || !wantsBack && pl.carryBundle)) {
-        bagFrom = wantsBack ? [...peg] : [...back]; bagAt = [...bagFrom]; bagDir = wantsBack ? 'take' : 'hang'; bagT = 0; bagHung = false; pl.carryBundle = false;
-      } else if (bagT >= 0 && (bagDir === 'take') !== wantsBack) {
-        bagFrom = [...bagAt]; bagDir = wantsBack ? 'take' : 'hang'; bagT = 0;
-      }
-      if (bagT >= 0) {
-        bagT += dt; const u = ease(clamp(bagT / 1.1, 0, 1)), target = bagDir === 'hang' ? peg : back;
-        bagAt = [lerp(bagFrom[0], target[0], u), lerp(bagFrom[1], target[1], u) - Math.sin(Math.PI * u) * 9];
-        hung.setAttribute('opacity', '1'); hung.setAttribute('transform', `translate(${f(bagAt[0])} ${f(bagAt[1])}) rotate(${f(Math.sin(u * Math.PI) * 10)})`);
-        hung.setAttribute('data-flight', bagDir);
-        if (bagT >= 1.1) { bagT = -1; bagHung = bagDir === 'hang'; pl.carryBundle = bagDir === 'take'; hung.setAttribute('opacity', bagHung ? '1' : '0'); hung.removeAttribute('data-flight'); }
-      } else { hung.setAttribute('opacity', bagHung ? '1' : '0'); if (bagHung) hung.setAttribute('transform', `translate(${SPOT.peg} 296) rotate(${f(Math.sin(t * .8) * 1.3)})`); }
+      // the bundle: on its peg while you are home, on your back outside — no flight in between
+      if (pl.carryBundle) { bagHung = true; pl.carryBundle = false; }
+      hung.setAttribute('opacity', bagHung ? '1' : '0');
+      if (bagHung) hung.setAttribute('transform', `translate(${SPOT.peg} 296) rotate(${f(Math.sin(t * .8) * 1.3)})`);
       // the cat, curled up, breathing
       homeCat.setAttribute('opacity', api.catHome ? '1' : '0');
       if (api.catHome) {
@@ -608,13 +623,13 @@ export function buildHome(svg: SVGSVGElement) {
       // 4 · onto the geta
       const plateP = step >= 4 ? 1 : step === 3 && anim >= 0 ? p : 0;
 
-      const cuts = Math.min(3, Math.floor(cutP * 3 + 0.15));
+      const cuts = Math.min(PIECES, Math.floor(cutP * PIECES + 0.15));
       const bw = BLOCK.w0 - cuts * BLOCK.cut;
       const bx0 = BLOCK.x1 - bw;
       block.setAttribute('d', rect(+f(bx0), BLOCK.y0, BLOCK.x1, BLOCK.y1));
       blockLines.setAttribute('d', `M${f(bx0 + 0.6)} 311 q${f(bw / 2)} -1 ${f(bw - 1.2)} 0 M${f(bx0 + 0.6)} 313.2 q${f(bw / 2)} -1 ${f(bw - 1.2)} 0`);
       if (step === 1 && anim >= 0) {
-        const lift = 5 * Math.abs(Math.sin(cutP * 3 * Math.PI));
+        const lift = 5 * Math.abs(Math.sin(cutP * PIECES * Math.PI));
         knife.setAttribute('transform', `translate(${f(bx0 - 0.2)} ${f(300 - lift)}) rotate(90)`);
       } else knife.setAttribute('transform', 'translate(296 320.6)');
 
@@ -633,18 +648,18 @@ export function buildHome(svg: SVGSVGElement) {
       const onPlate = -3.4 * ease(plateP);
       pieces.forEach((pc, i) => {
         // rice
-        const rp = clamp(riceP * 3.2 - i, 0, 1), re = ease(rp);
-        const pieceY = api.plateLayout === 'triangle' && i === 1 ? 2.4 : 0;
+        const rp = clamp(riceP * (PIECES + .2) - i, 0, 1), re = ease(rp);
+        const pieceY = SLOT_P[i][1];
         const rx = lerp(TUB[0], SLOT_X[i], re), ry = pieceY + lerp(TUB[1], 0, re) - 9 * Math.sin(Math.PI * re) + onPlate;
         pc.rice.setAttribute('transform', `translate(${f(rx)} ${f(ry)}) scale(${f(lerp(0.5, 1, re))})`);
         // slice: appears at the pile when cut, then flies onto its rice
         const cut = cuts > i ? 1 : 0;
-        const sp = clamp(nigP * 3.2 - i, 0, 1), se = ease(sp);
+        const sp = clamp(nigP * (PIECES + .2) - i, 0, 1), se = ease(sp);
         const sx = lerp(PILE[0] + i * 0.6, SLOT_X[i], se), sy = pieceY + lerp(PILE[1] - i * 0.7, -2.6, se) - 7 * Math.sin(Math.PI * se) + onPlate;
         pc.slice.setAttribute('transform', `translate(${f(sx)} ${f(sy)})`);
         pc.slice.setAttribute('opacity', f(cut));
         const gone = step >= 5 ? clamp(pc.eaten, 0, 1) : 0;
-        pc.g.setAttribute('opacity', f(riceP > 0 || cut ? 1 - gone : 0));
+        pc.g.setAttribute('opacity', f(i >= count ? 0 : riceP > 0 || cut ? 1 - gone : 0));
         if (eatT < 0 || i !== mealOrder[eaten]) {
           if (pc.g.parentNode !== dish) dish.appendChild(pc.g);
           pc.g.setAttribute('transform', '');
@@ -654,30 +669,30 @@ export function buildHome(svg: SVGSVGElement) {
       if (seatedAfterMeal && !mealActive && Math.abs(pl.x - IX - SEATS[mealSeat]) > 12) seatedAfterMeal = false;
       if (sleepT >= 0) sleepT += dt;
       // A single invitation starts the whole shared plate; each piece has one owner.
-      if (mealActive && eatT < 0 && eaten < 3) {
+      if (mealActive && eatT < 0 && eaten < count) {
         biteGap -= dt;
-        if (biteGap <= 0) { eatT = 0; top.appendChild(pieces[mealOrder[eaten]].g); if (sharedMeal && eaten === 2) { api.offeredLast = true; say('Son parça senin.', [pl.x - IX, pl.y - 48]); } }
+        if (biteGap <= 0) { eatT = 0; top.appendChild(pieces[mealOrder[eaten]].g); if (sharedMeal && eaten === count - 1) { api.offeredLast = true; say('Son parça senin.', [pl.x - IX, pl.y - 48]); } }
       }
       if (eatT >= 0) {
         eatT += dt;
         const pieceIndex=mealOrder[eaten], pc = pieces[pieceIndex], guest = api.diningGuest;
-        const source: Vec = [IX + TABLE_TOP[0] + SLOT_X[pieceIndex], TABLE_TOP[1] - 5 + (api.plateLayout === 'triangle' && pieceIndex === 1 ? 2.4 : 0)];
+        const source: Vec = [IX + TABLE_TOP[0] + SLOT_X[pieceIndex], TABLE_TOP[1] - 5 + SLOT_P[pieceIndex][1]];
         const guestMouth: Vec = guest ? [guest.head[0] + (guest.x > pl.x ? -1 : 1) * 1.5, guest.head[1] + 1.5] : pl.mouth;
         const handoff: Vec = [lerp(pl.x, guest?.x ?? pl.x, .55), TABLE_TOP[1] - 10];
-        const motion = biteMotion(eatT, mealTurn(eaten, sharedMeal), source, pl.mouth, guestMouth, handoff);
+        const motion = biteMotion(eatT, mealTurn(eaten, sharedMeal, count), source, pl.mouth, guestMouth, handoff);
         api.reach = motion.playerHand; api.guestReach = motion.guestHand;
-        pc.g.setAttribute('transform', `translate(${f(motion.food[0] - IX)} ${f(motion.food[1])}) scale(${f(1 - motion.bite * .65)}) translate(${f(-SLOT_X[pieceIndex])} ${f(3.4-(api.plateLayout==='triangle'&&pieceIndex===1?2.4:0))})`);
-        pc.g.setAttribute('opacity', f(1 - motion.bite)); pc.g.setAttribute('data-eating', motion.stage); pc.g.setAttribute('data-owner', mealTurn(eaten, sharedMeal));
+        pc.g.setAttribute('transform', `translate(${f(motion.food[0] - IX)} ${f(motion.food[1])}) scale(${f(1 - motion.bite * .65)}) translate(${f(-SLOT_X[pieceIndex])} ${f(3.4 - SLOT_P[pieceIndex][1])})`);
+        pc.g.setAttribute('opacity', f(1 - motion.bite)); pc.g.setAttribute('data-eating', motion.stage); pc.g.setAttribute('data-owner', mealTurn(eaten, sharedMeal, count));
         if (motion.done) {
           pc.eaten = 1; pc.g.removeAttribute('data-eating'); dish.appendChild(pc.g); api.reach = api.guestReach = null; eatT = -1; eaten++; biteGap = .7;
-          if (eaten >= 3) { mealActive = false; resetT = 0; made++; say('Afiyet olsun.', [pl.x - IX, pl.y - 48]); }
+          if (eaten >= count) { mealActive = false; resetT = 0; made++; say('Afiyet olsun.', [pl.x - IX, pl.y - 48]); }
         }
       } else if (placeT < 0) api.reach = api.guestReach = null;
       if (resetT >= 0) {
         resetT += dt;
         geta.setAttribute('opacity', f(1 - clamp(resetT / 0.6, 0, 1)));
         if (resetT > 1.2) {
-          resetT = -1; step = 0; eaten = 0; prep = 0; iceFish.setAttribute('opacity', '1');
+          resetT = -1; step = 0; eaten = 0; prep = 0; count = PIECES; iceFish.setAttribute('opacity', '1');
           pieces.forEach((pc) => { pc.eaten = 0; });
           props.appendChild(dish);
         }

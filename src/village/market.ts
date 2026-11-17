@@ -2,6 +2,7 @@
 import { el, f, PAPER, type Vec } from '../lib/ink.ts';
 import { createResident } from '../story/resident.ts';
 import { createPaper, fitDrawing, linePath } from '../story/paper.ts';
+import { MOTIFS } from '../story/motifs.ts';
 import { createHandwork } from '../story/handwork.ts';
 import { sfx } from '../story/fx.ts';
 import type { Entry } from '../story/notebook.ts';
@@ -126,7 +127,7 @@ export function buildMarket(svg: SVGSVGElement, card: HTMLElement, options: {
       const s=near(pl);if(!s||api.busy)return false;options.hint(null);
       if(s.id==='manav'){options.shop?.();return true;}
       if(s.id==='tea'){teaOpen=true;held=false;pour=Math.min(pour,.94);teaTimer=-1;tea.classList.add('show');}
-      if(s.id==='paper'){paper??=createPaper(card,()=>options.hint('Çizgin burada seni bekler.'));paper.open({kicker:'Söğüt Pazarı · Rei',title:'Evine bir kart.',tip:'Çizgin hem Rei’nin tezgâhında hem evinin duvarında kalır.',example:[[80,150],[120,90],[160,150],[80,150]],guide:false,done:'Kartımı asalım',then:lines=>{state.postcard=lines;renderCard();options.memory('market-paper');options.hint('Bir kopyası Rei’de. Bir kopyası evindeki duvarda.');}});}
+      if(s.id==='paper'){paper??=createPaper(card,()=>options.hint('Çizgin burada seni bekler.'));paper.open({kicker:'Söğüt Pazarı · Rei',title:'Evine bir kart: söğüt.',tip:'Soluk çizgilerin üstünden geç. Kart hem Rei’nin tezgâhında hem evinin duvarında kalır.',trace:MOTIFS.willow.strokes,done:'Kartımı asalım',then:lines=>{state.postcard=lines;renderCard();options.memory('market-paper');options.hint('Bir kopyası Rei’de. Bir kopyası evindeki duvarda.');}});}
       if(s.id==='dango'||s.id==='clay'){work??=createHandwork(card,()=>options.hint('Tezgâh kapanmadı. İstediğin zaman devam edebilirsin.'));const kind=s.id==='dango'?'dango':'cups';work.open(kind,{then:()=>{state[s.id]=true;options.memory('market-'+s.id);options.hint(s.id==='dango'?'Momo: “Renkleri senin gibi dizdim. Tezgâhta kalsın.”':'Sora: “Fincanların arasındaki boşluk da çizginin parçası.”');}});}
       return true;
     },

@@ -38,12 +38,13 @@ test('a morning with nothing to cook and nothing put away finds eggs at the door
   const g = morningGift(empty, []);
   assert.equal(g.gift, true);
   assert.deepEqual(makeable(g.pantry), ['tamago']);
-  assert.equal(morningGift(empty, ['somon']).gift, false, 'a dish put away is dinner too');
+  assert.equal(morningGift(empty, [['somon']]).gift, false, 'a dish put away is dinner too');
 });
 
 test('saved data is cleaned up', () => {
   assert.deepEqual(normalize({ somon: 9, yumurta: -1, mandalina: 'x' }), { somon: 2, yumurta: 0, 'salatalık': 0, mandalina: 0 });
   assert.deepEqual(normalize(undefined), START);
-  assert.deepEqual(normalizeDishes(['somon', 'pizza', 'kyuri']), ['somon', 'kyuri']);
+  assert.deepEqual(normalizeDishes(['somon', 'pizza', 'kyuri']), [['somon', 'kyuri']], 'an old flat list becomes a box');
+  assert.deepEqual(normalizeDishes([['somon', 'x'], [], ['kyuri'], ['tamago']]), [['somon'], ['kyuri']], 'two boxes at most, none empty');
   assert.deepEqual(normalizeBasket(['somon', 'x', 'yumurta', 'yumurta', 'mandalina', 'somon']), ['somon', 'yumurta', 'yumurta', 'mandalina']);
 });

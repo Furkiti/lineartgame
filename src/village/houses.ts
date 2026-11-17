@@ -189,7 +189,8 @@ export function buildStreet(layers, defs, { treeOffset = 0 } = {}) {
   S(alley, 'M446 289 L468 289 L465 283 L449 283Z', SP * 0.7);
   P(alley, 'M457 289 L457 306', SP * 0.5);
   // stepping stones shrinking into the distance
-  [[457, 339, 7, 2.4], [456, 328, 5.6, 1.9], [458, 319, 4.4, 1.5], [457, 312, 3.4, 1.1]].forEach(([x, y, rx, ry]) => S(alley, oval(x, y, rx, ry), SP * 0.5));
+  const stones = g(alley); stones.setAttribute('data-static-stones', ''); // the story presses its own, in ink
+  [[457, 339, 7, 2.4], [456, 328, 5.6, 1.9], [458, 319, 4.4, 1.5], [457, 312, 3.4, 1.1]].forEach(([x, y, rx, ry]) => S(stones, oval(x, y, rx, ry), SP * 0.5));
   const alleyLamp = pane(alley, glow, 453.5, 293, 460.5, 301, { thr: 0.05, lateOff: 9 });
   P(alley, 'M457 293 L457 301 M453.5 297 L460.5 297', SP * 0.4);
 

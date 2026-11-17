@@ -23,10 +23,10 @@ const seed={version:2,story:{arcVersion:5,day:2,dayIntro:2,created:true,walkLear
  await d.parts();await p.waitForSelector('.handwork.show',{state:'hidden'});
  assert.equal(await p.evaluate(()=>__game.market.snapshot().dango),true);
  await center(578);await d.walkTo(2860,698);await visit(124,698);await d.action('Rei ile kart çiz');
- await d.paperDraw();assert.equal(await p.locator('[data-market-postcard=stall] path').count(),3);
+ await d.paperDraw();assert.equal(await p.locator("[data-market-postcard=stall] path").count(),6);
  await p.evaluate(()=>__game.save());
  await p.reload();await p.waitForFunction(()=>__game.inMarket);
- assert.equal(await p.evaluate(()=>__game.market.snapshot().postcard.length),2);
+ assert.equal(await p.evaluate(()=>__game.market.snapshot().postcard.length),5);
  assert.equal(await p.evaluate(()=>__game.market.snapshot().tea),true);
  assert.equal(await p.evaluate(()=>__game.market.snapshot().dango),true);
  await p.waitForTimeout(1000);await p.screenshot({path:'.local/v6-market-paper-saved.png'});
@@ -43,7 +43,7 @@ const seed={version:2,story:{arcVersion:5,day:2,dayIntro:2,created:true,walkLear
  await center(818);await d.walkTo(2860,340);await d.drive(0,-1);await p.waitForFunction(()=>!__game.inMarket);await d.drive(0,0);
  assert(Math.abs(await p.evaluate(()=>__game.player.x)-657)<4);
  await d.walkTo(657,356);await d.home();await d.walkTo(1410,356);
- assert.equal(await p.locator('[data-market-postcard=home] path').count(),3);
+ assert.equal(await p.locator('[data-market-postcard=home] path').count(),6);
  await p.screenshot({path:'.local/v6-market-card-at-home.png'});
  assert.deepEqual(d.errors,[]);await d.close();d=null;
  console.log('PASS real touch alley entry, vertical travel, all four vendors, held tea, saved drawing, both sides of stalls and return home');

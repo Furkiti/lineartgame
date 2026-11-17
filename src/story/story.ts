@@ -18,9 +18,11 @@ import { createCloseup } from './closeup.ts';
 import { createShodo, CHA, brush, compare } from './shodo.ts';
 import { createIcebox, type IceboxResult } from './icebox.ts';
 import { createGrocer } from './greengrocer.ts';
-import { START, ITEMS, DISH_SPOTS, normalize, normalizeDishes, normalizeBasket, use, store as storeItems, makeable, canFeed, morningGift, type Item, type Topping } from './pantry.ts';
+import { START, ITEMS, DISH_BOXES, PIECES, type Box, normalize, normalizeDishes, normalizeBasket, use, store as storeItems, makeable, canFeed, morningGift, type Item, type Topping } from './pantry.ts';
 import { createNotebook, SKETCH, type Entry } from './notebook.ts';
 import { createPaper, fitLine, fitDrawing, linePath } from './paper.ts';
+import { MOTIFS } from './motifs.ts';
+import { createAlley, normalizeStones, STONES, BEAT, type Stone } from './alley.ts';
 import { nextVisit, timeRate, type Visit } from './schedule.ts';
 import { type SavedGame } from './save.ts';
 import { createResident } from './resident.ts';
@@ -196,7 +198,7 @@ export function createStory(o: {
   const q = {
     kite: 'sad' as 'sad' | 'talked' | 'done', dinner: '' as '' | 'kenta' | 'alone', sushi: false, fox: false,
     lantern: false, toy: false, toyKind: 0, catHome: false, letter: false, fair: false, order: false, fresh: new Set<string>(), day: 1, slept: 0,
-    name: '', shopping: [] as string[], pantry: { ...START }, dishes: [] as Topping[], basket: [] as Item[], iceboxDay: 0, grocerMet: false, created: false, walkLearned: false, guideMet: false, met: false, homeSeen: false, homeShown: false, visitedHome: false, kentaAway: false, nightHint: false, windowMoment: false, tableDecor: false,
+    name: '', shopping: [] as string[], pantry: { ...START }, dishes: [] as Box[], basket: [] as Item[], iceboxDay: 0, grocerMet: false, created: false, walkLearned: false, guideMet: false, met: false, homeSeen: false, homeShown: false, visitedHome: false, kentaAway: false, nightHint: false, windowMoment: false, tableDecor: false,
     visit: 'none' as Visit, invitedDay: 0, missedNote: false, reminded: false,
     day2Seen: false, day3Seen: false, souvenir: '' as '' | 'cushion' | 'water', coins: 0,
     project: '' as '' | 'tea' | 'paws' | 'lanterns', projectPlan: '' as '' | 'tea' | 'paws', projectDay: 0, gathering: false, keepsake: false, tookMemento: false,
@@ -206,6 +208,7 @@ export function createStory(o: {
     shelterParts: [] as number[], servedParts: [] as number[],
     eveningChoice: '' as '' | 'lantern' | 'home',
     events: [] as { day: number; id: string }[],
+    alley: [] as Stone[],
     history: [] as { dayN: number; entries: Entry[]; sentence: string }[],
   };
   if (o.saved) { const { fresh, ...state } = o.saved.story; Object.assign(q, state); q.fresh = new Set(Array.isArray(fresh) ? fresh : []); }
@@ -214,6 +217,9 @@ export function createStory(o: {
   q.pantry = normalize(q.pantry); q.dishes = normalizeDishes(q.dishes); q.basket = normalizeBasket(q.basket);
   if (!Array.isArray(q.shelterParts)) q.shelterParts = [];
   if (!Array.isArray(q.servedParts)) q.servedParts = [];
+  // the stepping stones home: pressed in ink the first time you come; older homes already had them
+  q.alley = normalizeStones(q.alley);
+  if (o.saved && !q.alley.length && (q.visitedHome || q.day > 1)) q.alley = STONES.map(() => ({ q: 1, tilt: 0, gap: BEAT }));
   if (o.saved && o.saved.story.arcVersion !== 5) {
     // Preserve the old drawings and choices; the new shared ending still has a beginning.
     q.gathering = false; q.festivalArt = false;
@@ -343,10 +349,10 @@ export function createStory(o: {
     onDone: (r: IceboxResult) => {
       mode = 'walk'; cam = null;
       if (r.mode === 'store') {
-        if (iceboxPlate) { q.dishes = [...q.dishes, ...home.storeDish()].slice(0, DISH_SPOTS); env.tip('Yemeklerin dolapta. İstediğin akşam çıkarıp yiyebilirsin.'); }
+        if (iceboxPlate) { q.dishes = [...q.dishes, home.storeDish()].filter(b => b.length).slice(0, DISH_BOXES); env.tip('Yemeklerin dolapta. İstediğin akşam çıkarıp yiyebilirsin.'); }
         else { const { pantry, left } = storeItems(q.pantry, q.basket); q.pantry = pantry; q.basket = left; q.shopping = q.shopping.filter(x => q.pantry[x as Item] === 0); }
       } else if ('cook' in r) { q.pantry = use(q.pantry, r.cook); home.fromIcebox(r.cook); closeup.setTopping(r.cook); }
-      else { const d = [...q.dishes]; for (const t of r.serve) { const i = d.indexOf(t); if (i >= 0) d.splice(i, 1); } q.dishes = d; home.takeDish(r.serve); env.tip('Tabak elinde. Masaya götür ya da dolaba geri koy.'); }
+      else { q.dishes = q.dishes.filter((_, i) => i !== r.box); home.takeDish(r.serve); env.tip('Tabak elinde. Masaya götür ya da dolaba geri koy.'); }
       afterIcebox();
     },
     onExit: () => { mode = 'walk'; cam = null; afterIcebox(); },
@@ -374,7 +380,7 @@ export function createStory(o: {
   el('path', { d: 'M-2 -6 q-3 -3 -1 -4 q2 0 3 3 q1 -3 3 -3 q2 1 -1 4', fill: '#34507a', stroke: 'currentColor', 'stroke-width': .45 }, sack);
   el('path', { d: 'M-4 1 q2 -1.5 4 0 t4 0', fill: 'none', stroke: '#e8eef4', 'stroke-width': .4 }, sack);
   // ------------------------------------------------------------------ state & a tiny script runner
-  let mode: 'intro' | 'walk' | 'cine' | 'brush' | 'cook' | 'sleep' | 'desk' | 'craft' = q.created ? 'walk' : 'intro';
+  let mode: 'intro' | 'walk' | 'cine' | 'brush' | 'cook' | 'sleep' | 'desk' | 'craft' | 'alley' = q.created ? 'walk' : 'intro';
   const syncControls = () => card.classList.toggle('controls-locked', mode !== 'walk');
   let cam: Cam = null;
   let focusOn: (() => Vec) | null = null;
@@ -492,7 +498,7 @@ export function createStory(o: {
       env.tip('Açık alana bir şekil çiz. Uçlarını birleştir.', true);
     } else if (what === 'lantern') {
       pad.classList.remove('show'); card.classList.remove('brush-focus');
-      drawOnPaper({ title: 'Fenerine bir iz bırak.', tip: 'Gece bu çizgilerin arasından ışık vuracak.', example: [[90, 90], [150, 110], [90, 150], [150, 175]], guide: false, done: 'Fenere asalım', then: lines => {
+      drawOnPaper({ title: 'Fenerine bir hilal.', tip: 'Soluk çizginin üstünden geç. Gece ışık bu çizgilerden vuracak.', trace: MOTIFS.lantern.strokes, done: 'Fenere asalım', then: lines => {
         for (const line of lines) {
           const points = line.map(p => [L.x + (p[0] - 120) * .055, L.top + 4 + (p[1] - 10) / 240 * L.h] as Vec);
           lanternLines.push(points); el('path', { d: brush(points, .5), fill: 'currentColor' }, lanternArt);
@@ -501,7 +507,7 @@ export function createStory(o: {
       } });
     } else {
       pad.classList.remove('show'); card.classList.remove('brush-focus');
-      const openToy = () => drawOnPaper({ title: `Kediye bir ${TOYS[q.toyKind].name.toLowerCase()}.`, tip: 'Nasıl çizersen onunla oynayacak. Küçük bir şekil yeter.', example: fitLine(TOYS[q.toyKind].pts, 120, 125, 150), done: 'Pisiye verelim', then: lines => {
+      const openToy = () => drawOnPaper({ title: `Kediye bir ${TOYS[q.toyKind].name.toLowerCase()}.`, tip: 'Soluk çizginin üstünden geç. Nasıl çizersen onunla oynayacak.', trace: [fitLine(TOYS[q.toyKind].pts, 120, 125, 150)], done: 'Pisiye verelim', then: lines => {
         art.toyDrawing = fitDrawing(lines, TOY_AT[0], TOY_AT[1], q.toyKind === 0 ? 14 : q.toyKind === 1 ? 19 : 17);
         const world = art.toyDrawing.reduce((a, b) => a.length > b.length ? a : b, [] as Vec[]);
         run(toyBorn(world, 15));
@@ -597,11 +603,42 @@ export function createStory(o: {
     ui.guide(mouth); toDoor();
     let waited = 0;
     yield () => { waited += ctx.dt; return ctx.inside || Math.abs(player.x - DOOR_X) < 22 && player.y < 352 || waited > 45; };
+    if (!ctx.inside && waited <= 45 && !alley.built) { yield* buildAlley(); return; }
     if (!ctx.inside && waited <= 45) yield* craneLine('İşte! Ara sokağın sonu senin evin.');
     ui.guide(null);
     yield 1.2;
     yield* craneLine('Yolunu ararsan beni köşede bul, bana dokun.');
     q.guideMet = true;
+  }
+
+  // ------------------------------------------------------------------ roji: pressing the stepping stones home
+  const alley = createAlley(layers.front);
+  alley.stones = q.alley;
+  svg.querySelectorAll('[data-static-stones]').forEach(n => (n as SVGElement).style.display = 'none');
+  let alleyY = 0;
+  function* buildAlley(): Scene {
+    mode = 'alley'; obj = null; env.tip(null); focusOn = null;
+    ui.guide(() => [DOOR_X + 13, 296]);
+    cam = fit(DOOR_X - 44, 268, DOOR_X + 44, 374, 3.4);
+    yield .9;
+    yield* craneLine('İşte evin! Ama yolu daha kurşun kalemle duruyor.');
+    yield* craneLine('Her adımda bir taş bas. Halka taşa oturunca dokun.');
+    alley.start(ctx.t);
+    env.tip('Halka taşa oturduğu an ekrana dokun.', true);
+    ui.showGesture('tap', () => [[STONES[0][0], STONES[0][1]]], { period: BEAT });
+    yield () => alley.stones.length > 0;
+    ui.hideGesture(); env.tip(null);
+    yield () => alley.done;
+    q.alley = alley.stones.map(s => ({ ...s }));
+    ui.guide(null); sfx.chime();
+    const great = q.alley.filter(s => s.q >= 1).length;
+    think(great >= 4 ? 'Evimin yolu. Adımlarım gibi düzgün.' : great >= 2 ? 'Evimin yolu. Biraz yamuk, tam benim gibi.' : 'Yamuk yumuk ama benim yolum.', 3.2);
+    yield 3.2;
+    yield* craneLine('Taşlar adımını hatırlar. Her eve dönüşünde çalarlar.');
+    yield* craneLine('Yolunu ararsan beni köşede bul, bana dokun.');
+    q.guideMet = true;
+    mode = 'walk'; cam = null;
+    env.tip('Taşların üstünden yukarı yürü. Kapın orada.', true);
   }
 
   function* toyPick(): Scene {
@@ -623,15 +660,9 @@ export function createStory(o: {
     hana.talking = true; cam = fit(Math.min(player.x, hana.x) - 40, 274, Math.max(player.x, hana.x) + 40, 380, 2.4);
     yield* sayLine(hanaHead, 'Ben Hana. Kenta uçurtmanı gösterdi; sokağın yeni çizeri sensin demek.');
     yield* sayLine(hanaHead, 'Tabelam soldu. Kapıma senden bir işaret bırakır mısın?');
-    const a = yield* choose(['Kendi işaretimi çizeyim.', '茶 yazısını fırçalayayım.']);
+    yield* sayLine(playerHead, 'Çay evine en çok 茶 yakışır. Fırçayı alayım.');
     hana.talking = false;
-    if (a === 1) { mode = 'desk'; shodo.open(); return; }
-    let done = false;
-    drawOnPaper({ kicker: 'Hana’nın çay evi.', title: 'Kapıya senden bir işaret.', tip: 'Bir yaprak, bir kuş… Çizdiğin aynen tabelada kalacak.', example: [[80,150],[120,80],[165,120],[125,165],[80,150]], guide: false, done: 'Tabelaya asalım', then: lines => {
-      art.sign = fitDrawing(lines, 50, 50, 80).map(l => brush(l, 1.6)); done = true;
-    } });
-    yield () => done;
-    yield* orderDelivered(1);
+    mode = 'desk'; shodo.open();
   }
 
   function* orderDelivered(_score: number): Scene {
@@ -746,26 +777,6 @@ export function createStory(o: {
     player.faceTo = null;
   }
 
-  function* windowMoment(): Scene {
-    mode = 'cine'; ui.hint(playerHead, null); home.windowOpen = true;
-    cam = fit(IX + 142, 250, IX + 235, 359, 2.7);
-    think('Biraz hava… Sokaktan fincan sesleri geliyor.', 2.8);
-    yield 2.8;
-    q.windowMoment = true; mode = 'walk'; cam = null;
-    env.tip(q.dinner === 'kenta' ? 'İstersen Kenta gelene kadar sofrayı süsle.' : 'İstersen sofraya senden bir desen bırak.');
-  }
-  function* decorateSupper(): Scene {
-    mode = 'cine'; ui.hint(playerHead, null);
-    let done = false;
-    drawOnPaper({ kicker: q.dinner === 'kenta' ? 'Misafir beklerken.' : 'Kendi sofranda.', title: 'Sofrada senden bir iz.', tip: 'Bir çiçek, bir dal… Ne istersen çiz.', example: [[90, 150], [120, 100], [150, 150], [100, 130], [140, 130]], guide: false, done: 'Sofraya serelim', then: lines => {
-      art.table = lines; q.tableDecor = true; mark('table');
-      home.decorateTable(fitDrawing(lines, 0, 0, 28).map(l => linePath(l))); done = true;
-    } });
-    yield () => done;
-    sfx.chime(); mode = 'walk'; cam = null;
-    env.tip(q.dinner === 'kenta' ? 'Desenin sofrada kaldı. Kenta birazdan kapını çalar.' : 'Desenin sofrada kaldı. Pencere açık, sofra senin.');
-  }
-
   function* guestArrives(): Scene {
     mode = 'walk';
     guest = createKenta(home.actors, IX + 30, 356); guestAte = 0;
@@ -868,10 +879,6 @@ export function createStory(o: {
     if (ctx.fair || (script && blocks)) return null;
     if (ctx.inside) {
       const atTable = Math.abs(player.x - IX - 186) < 35 && player.y < 370;
-      if (atTable && home.step === 6 && !home.canEat) {
-        if (!q.windowMoment) return { label: 'Pencereyi arala', go: () => run(windowMoment()) };
-        if (!q.tableDecor) return { label: 'Sofrayı süsle', go: () => run(decorateSupper()) };
-      }
       if (atTable && q.souvenir === 'cushion' && !q.giftUsed && home.step === 0) return { label: 'Pencerede biraz otur', go: () => run(useGift()) };
       return null;
     }
@@ -1013,7 +1020,7 @@ export function createStory(o: {
     handwork.open('shelter', { restored: q.shelterParts, onPlaced: ids => { q.shelterParts = ids; }, then: () => { built = true; } });
     yield () => built;
     mode = 'cine'; let drawn = false;
-    drawOnPaper({ kicker: q.projectPlan === 'tea' ? 'Birlikte çay içilecek bir yer.' : 'Yağmurdan kaçan patilere.', title: 'Örtüde senin çizgin.', tip: 'Desenin örtüye aynen geçecek.', example: [[65,140],[90,110],[120,140],[150,110],[180,140]], guide: false, done: 'Örtüyü gerelim', then: lines => { art.project = lines; drawn = true; } });
+    drawOnPaper({ kicker: q.projectPlan === 'tea' ? 'Birlikte çay içilecek bir yer.' : 'Yağmurdan kaçan patilere.', title: q.projectPlan === 'tea' ? 'Örtüye dalgalar.' : 'Örtüye bir pati.', tip: 'Soluk çizgilerin üstünden geç. Desenin örtüye aynen geçecek.', trace: (q.projectPlan === 'tea' ? MOTIFS.waves : MOTIFS.paw).strokes, done: 'Örtüyü gerelim', then: lines => { art.project = lines; drawn = true; } });
     yield () => drawn;
     q.project = q.projectPlan; q.projectDay = q.day; mark('project'); sfx.success(); drawnProject = ''; mode = 'cine'; focusOn = () => [hana.x, hana.y];
     yield* sayLine(hanaHead, q.project === 'tea' ? 'İlk fincanı buraya koydum. Yağmurun altında üşümeden oturabileceğiz.' : 'Kuru minderler de burada. Bir tek “miyav” yazımız eksik.');
@@ -1034,7 +1041,7 @@ export function createStory(o: {
     }
     if (!art.chime.length) {
       let drawn = false;
-      drawOnPaper({ kicker: 'Rüzgârın götürdüğüne yeni bir çizgi.', title: 'Çanın kâğıt dili.', tip: 'Ne çizersen rüzgârda o sallanacak.', example: [[90,150],[120,90],[150,150],[90,150]], guide: false, done: 'İpine bağlayalım', then: lines => { art.chime = lines; drawn = true; } });
+      drawOnPaper({ kicker: 'Rüzgârın götürdüğüne yeni bir çizgi.', title: 'Çanın kâğıt dili: bir japon balığı.', tip: 'Soluk çizginin üstünden geç. Rüzgârda o yüzecek.', trace: MOTIFS.goldfish.strokes, done: 'İpine bağlayalım', then: lines => { art.chime = lines; drawn = true; } });
       yield () => drawn;
     }
     let tied = false; mode = 'craft';
@@ -1053,7 +1060,7 @@ export function createStory(o: {
     yield* sayLine(kentaHead, 'Uçurtmamı da getirdim! Sen buluşmanın işaretini çiz.');
     const a = yield* choose(['Açık bir çay sofrası.', 'Sessiz bir çizim buluşması.']);
     q.festivalMode = a === 0 ? 'tea' : 'drawing'; let drawn = false;
-    drawOnPaper({ kicker: 'Mahallenin yeni buluşma yeri.', title: 'Buluşmaya bir işaret.', tip: 'Çizgin flamada; önceki çizgilerin de yanında olacak.', example: [[80,150],[120,90],[160,150],[80,150]], guide: false, done: 'Köşeye asalım', then: lines => { art.invitation = lines; q.festivalArt = true; drawn = true; } });
+    drawOnPaper({ kicker: 'Mahallenin yeni buluşma yeri.', title: q.festivalMode === 'tea' ? 'Flamaya bir fincan.' : 'Flamaya bir ensō.', tip: 'Soluk çizginin üstünden geç. Flamada önceki çizgilerinin yanında olacak.', trace: (q.festivalMode === 'tea' ? MOTIFS.teacup : MOTIFS.enso).strokes, done: 'Köşeye asalım', then: lines => { art.invitation = lines; q.festivalArt = true; drawn = true; } });
     yield () => drawn;
     mark('invitation'); drawnProject = ''; mode = 'cine';
     yield* sayLine(hanaHead, q.festivalMode === 'tea' ? 'Fincanlar hazır. Birer tane uzatır mısın?' : 'Kâğıtları serdim. Fırçaları da sen uzat.');
@@ -1200,7 +1207,7 @@ export function createStory(o: {
     snapshot() { return { story: { ...q, fresh: [...q.fresh] }, art: { ...art, kite: kiteLine, lantern: lanternLines, toy: toy.line, cooking: closeup.snapshot() } }; },
     get cam() { return cam; },
     get sitting() { return seated ? 1 : 0; },
-    get facing() { if (!focusOn) return null; const p = focusOn(); return Math.atan2((p[1] - player.y) * .6, p[0] - player.x); },
+    get facing() { if (mode === 'alley') return -Math.PI / 2; if (!focusOn) return null; const p = focusOn(); return Math.atan2((p[1] - player.y) * .6, p[0] - player.x); },
     get mode() { return mode; },
     get closeupOpen() { return closeup.isOpen; },
     /** what the action button says, if the story has something to offer */
@@ -1250,6 +1257,15 @@ export function createStory(o: {
       refreshObjective();
       if (q.day >= 2 && q.dayIntro < q.day && mode === 'walk' && !script && !c.fair) run(secondMorning());
       if (script) { if (waitFn) { if (waitFn()) { waitFn = null; advance(); } } else { waitT -= dt; if (waitT <= 0) advance(); } }
+      // the stepping stones: the ring, the step onto each pressed stone, the notes on the way home
+      alley.update(t, dt);
+      const stand = alley.standY;
+      if (stand !== null && !c.inside && !c.fair) { player.x = approach(player.x, DOOR_X, 6, dt); player.y = approach(player.y, stand, 7, dt); }
+      if (!c.inside && !c.fair) alley.stepOn(player.y, alleyY || player.y);
+      alleyY = c.inside || c.fair ? 0 : player.y;
+      if (!c.inside && !c.fair) alley.gate(player.y, dt, P.lamp);
+      if (c.inside) alley.openGate();
+      if (!alley.built && mode === 'walk' && !script && q.homeShown && !c.inside && !c.fair && Math.abs(player.x - DOOR_X) < 14 && player.y < 355) run(buildAlley());
 
       if (!q.met && q.kite === 'sad' && Math.abs(player.x - kenta.x) < 145 && !c.inside) stuck.release();
       // Kenta takes the actual kite away; he returns on a later day or for dinner.
@@ -1265,7 +1281,7 @@ export function createStory(o: {
         else if ((q.kentaAway && q.day === 1) || (P.night > .5 && q.kite === 'done' && mode === 'walk')) kenta.g.style.display = 'none';
       }
       if (c.inside && !q.visitedHome) { q.visitedHome = true; env.tip(null); }
-      homeBeacon.setAttribute('opacity', f(q.homeShown && !q.visitedHome && !c.inside && !c.fair ? .7 + Math.sin(t * 2) * .2 : 0));
+      homeBeacon.setAttribute('opacity', f(q.homeShown && !q.visitedHome && mode !== 'alley' && !c.inside && !c.fair ? .7 + Math.sin(t * 2) * .2 : 0));
       if (mode === 'brush' && purpose === 'kite' && !drawing) {
         brushIdle += dt;
         if (brushIdle > 9 && brushIdle < 9 + dt * 2) {
@@ -1319,7 +1335,7 @@ export function createStory(o: {
       // what the icebox offers right now
       const plate = home.plate;
       home.iceboxPrompt = home.busy || mode !== 'walk' ? null
-        : home.step === 5 ? (q.dishes.length + plate.length <= DISH_SPOTS ? 'Dolaba koy' : null)
+        : home.step === 5 ? (q.dishes.length < DISH_BOXES && plate.length ? 'Dolaba koy' : null)
         : q.basket.length && home.prep !== 1 && (home.step === 0 || home.step === 6) ? 'Alışverişi yerleştir'
         : home.step === 0 && home.prep === 0 ? 'Dolabı aç' : null;
 
@@ -1337,18 +1353,18 @@ export function createStory(o: {
       if (q.day === 1 && q.dinner !== 'kenta' && !q.sushi && home.step === 6 && c.tau < .69) home.canEat = false;
       if (!couldEat && home.canEat && home.step === 6) env.tip(guest ? 'Kenta geldi. Sofrada birlikte yiyebilirsiniz.' : 'Günün ışığı yumuşadı. Sofrana oturabilirsin.', true);
       if (guest && home.eaten > guestAte) { guestAte = home.eaten; ui.heart(guestHead()); sfx.pop(); }
-      if (guest && home.step === 0 && guestAte >= 3 && !script && !q.sushi) run(guestLeaves());
+      if (guest && home.step === 0 && guestAte >= 1 && !script && !q.sushi) run(guestLeaves());
       if (!guest && home.eaten > ateSeen) ateSeen = home.eaten;
-      if (!guest && q.kite === 'done' && !q.sushi && c.inside && home.step === 0 && ateSeen >= 3 && !script) run(dinnerAlone());
+      if (!guest && q.kite === 'done' && !q.sushi && c.inside && home.step === 0 && ateSeen >= 1 && !script) run(dinnerAlone());
       drawNeighborhood(c);
 
       // show once how to walk into the alley (that is the way home) and out of the house again
       const calm = mode === 'walk' && !(script && blocks);
-      if (alleyTaught === 0 && calm && !c.inside && !c.fair && q.kite === 'done' && Math.abs(player.x - DOOR_X) < 16) {
+      if (alleyTaught === 0 && calm && alley.built && !c.inside && !c.fair && q.kite === 'done' && Math.abs(player.x - DOOR_X) < 16) {
         alleyTaught = t + 60; env.tip('Bu taşlı ara sokağa, yukarı doğru yürü. Evin orada.', true);
         ui.showGesture('path', () => [[DOOR_X + 2, 380], [DOOR_X + 2, 338]], { period: 2 });
       }
-      if (alleyTaught > 0 && c.inside) { alleyTaught = -1; ui.hideGesture(); }
+      if (alleyTaught > 0 && c.inside) { alleyTaught = -1; ui.hideGesture(); env.tip(null); }
       insideT = c.inside ? insideT + dt : 0;
       if (exitTaught === 0 && calm && c.inside && insideT > 12 && Math.abs(player.x - (IX + 40)) < 26) {
         exitTaught = t + 5; env.tip('Dışarı çıkmak için kapıya doğru yürü.');
@@ -1396,7 +1412,7 @@ export function createStory(o: {
             else if (key === 'cook') { counter(); env.tip('Tezgâhta suşi hazırla.'); }
             else if (key === 'take') { counter(); }
             else if (key === 'table') { setObj(() => [IX + 186, 316], () => Math.abs(player.x - (IX + 186)) < 30, true); env.tip('Masaya doğru yürü; tabağı bırakacaksın.'); }
-            else { setObj(() => [IX + 186, 305], () => Math.abs(player.x - IX - 186) < 30, true); if (!home.canEat) env.tip('Sofra hazır. Pencereyi aralayabilir, sofraya bir desen çizebilirsin.', true); else env.tip('Sofraya oturup yiyebilirsin.', true); }
+            else { setObj(() => [IX + 186, 305], () => Math.abs(player.x - IX - 186) < 30, true); if (!home.canEat) env.tip('Sofra hazır. Akşam ışığı inince oturursun; dolabı doldurabilir ya da biraz dışarı çıkabilirsin.', true); else env.tip('Sofraya oturup yiyebilirsin.', true); }
           }
         } else if (!c.fair) {
           insideKey = '';
@@ -1417,9 +1433,11 @@ export function createStory(o: {
       if (q.kite === 'talked' && mode === 'walk' && !script) ui.sparkle(() => [kenta.x, kenta.y - 30]);
     },
     /** called on any touch: a ring and a sound, everywhere */
-    touch(e: PointerEvent) { wakeAudio(); inkRing(card, e.clientX, e.clientY); },
+    touch(e: PointerEvent) { wakeAudio(); inkRing(card, e.clientX, e.clientY); if (mode === 'alley') alley.tap(ctx.t); },
+    /** the stepping stones still to be pressed: the alley is closed until then */
+    get alleyOpen() { return alley.built || mode === 'alley'; },
     // debug hooks for headless checks
-    _dbg: { q, kenta, hana, fox, closeup, icebox, grocer, shodo, handwork, run, startBrush, get mode() { return mode; }, get picked() { return picked; }, drawingAt },
+    _dbg: { alley, q, kenta, hana, fox, closeup, icebox, grocer, shodo, handwork, run, startBrush, get mode() { return mode; }, get picked() { return picked; }, drawingAt },
   };
 }
 export type Story = ReturnType<typeof createStory>;
